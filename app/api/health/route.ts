@@ -12,20 +12,21 @@ export async function GET() {
   const runs = await redis.get('latest_runs') || []
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
-
   return NextResponse.json({ calories, runs, cigs, plan })
 }
 
 export async function POST(req: Request) {
   const body = await req.json()
   const today = new Date().toISOString().split('T')[0]
+  const metrics = body.data?.metrics
+  const workouts = body.data?.workouts
 
-  if (body.type === 'calories') {
-    const metrics = body.data?.metrics || []
+  // Auto-detect calories
+  if (metrics) {
     const active = metrics.find((m: any) => m.name === 'active_energy')
     if (active) {
       const isKj = active.units === 'kJ'
-      const total = active.data.reduce((s: number, d: any) => 
+      const total = active.data.reduce((s: number, d: any) =>
         s + (isKj ? d.qty * 0.239 : d.qty), 0)
       await redis.set(`calories_${today}`, {
         calories_kcal: Math.round(total),
@@ -36,10 +37,10 @@ export async function POST(req: Request) {
     }
   }
 
-  if (body.type === 'runs') {
-    const workouts = body.data?.workouts || []
+  // Auto-detect runs
+  if (workouts) {
     const RUN_TYPES = ['Outdoor Run', 'Indoor Run', 'Running']
-    const runs = workouts.filter((w: any) => 
+    const runs = workouts.filter((w: any) =>
       w.distance?.units === 'km' && RUN_TYPES.includes(w.name)
     ).map((w: any) => {
       const secs = w.duration / w.distance.qty
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
         name: w.name,
       }
     })
-    await redis.set('latest_runs', runs)
+    if (runs.length > 0) await redis.set('latest_runs', runs)
   }
 
   return NextResponse.json({ ok: true })
