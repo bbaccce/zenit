@@ -26,18 +26,28 @@ export async function POST(req: Request) {
     const active = metrics.find((m: any) => m.name === 'active_energy')
     if (active) {
       const isKj = active.units === 'kJ'
-      const total = active.data.reduce((s: number, d: any) =>
-        s + (isKj ? d.qty * 0.239 : d.qty), 0)
+
+      // Deduplicate overlapping entries from Health Auto Export
+      const seen = new Map<string, number>()
+      for (const d of active.data) {
+        const key = d.date ?? d.startDate ?? d.dateComponents ?? JSON.stringify(d)
+        const val = isKj ? d.qty * 0.239 : d.qty
+        if (!seen.has(key) || seen.get(key)! < val) {
+          seen.set(key, val)
+        }
+      }
+      const total = Array.from(seen.values()).reduce((s, v) => s + v, 0)
+
       await redis.set(`calories_${today}`, {
         calories_kcal: Math.round(total),
-        entries: active.data.length,
+        entries: seen.size,
         date: today,
         timestamp: new Date().toISOString()
       })
     }
   }
 
-  // Auto-detect runs
+  // Auto-detect runs (unchanged)
   if (workouts) {
     const RUN_TYPES = ['Outdoor Run', 'Indoor Run', 'Running']
     const runs = workouts.filter((w: any) =>
