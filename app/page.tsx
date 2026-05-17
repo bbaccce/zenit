@@ -182,6 +182,72 @@ export default function Home() {
               })}
             </div>
 
+            {/* Monthly km progress */}
+            <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
+              <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:16}}>📅 May — Monthly km Goal</div>
+              {(() => {
+                const WEEKS = [
+                  {label:'W1',km:13,goal:25},
+                  {label:'W2',km:11,goal:25},
+                  {label:'W3',km:22.15,goal:25},
+                  {label:'W4',km:0,goal:25},
+                ]
+                const totalKm = 46.15
+                const monthGoal = 100
+                const monthPct = Math.min((totalKm/monthGoal)*100, 100)
+                const r = 52
+                const circ = 2*Math.PI*r
+                return (
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',gap:20,marginBottom:20}}>
+                      <div style={{position:'relative',width:120,height:120,flexShrink:0}}>
+                        <svg width="120" height="120" style={{transform:'rotate(-90deg)'}}>
+                          <circle cx="60" cy="60" r={r} fill="none" stroke={C.border} strokeWidth="10"/>
+                          <circle cx="60" cy="60" r={r} fill="none" stroke={C.run} strokeWidth="10"
+                            strokeDasharray={`${circ*(monthPct/100)} ${circ}`} strokeLinecap="round"
+                            style={{transition:'stroke-dasharray 1s ease'}}/>
+                        </svg>
+                        <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
+                          <div style={{fontSize:20,fontWeight:900,color:C.run}}>{totalKm}</div>
+                          <div style={{fontSize:9,color:C.muted}}>km</div>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:28,fontWeight:900,color:C.run}}>{Math.round(monthPct)}%</div>
+                        <div style={{fontSize:11,color:C.muted}}>of {monthGoal}km goal</div>
+                        <div style={{fontSize:11,color:C.green,marginTop:4}}>+{(monthGoal-totalKm).toFixed(1)}km to go</div>
+                        <div style={{fontSize:10,color:C.muted,marginTop:4}}>May 2026</div>
+                      </div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+                      {WEEKS.map((w,i) => {
+                        const pct = Math.min((w.km/w.goal)*100, 100)
+                        const wr = 26
+                        const wcirc = 2*Math.PI*wr
+                        const col = w.km>=w.goal ? C.green : i===2 ? C.run : w.km>0 ? C.yellow : C.muted
+                        return (
+                          <div key={i} style={{textAlign:'center'}}>
+                            <div style={{position:'relative',width:64,height:64,margin:'0 auto'}}>
+                              <svg width="64" height="64" style={{transform:'rotate(-90deg)'}}>
+                                <circle cx="32" cy="32" r={wr} fill="none" stroke={C.border} strokeWidth="7"/>
+                                <circle cx="32" cy="32" r={wr} fill="none" stroke={col} strokeWidth="7"
+                                  strokeDasharray={`${wcirc*(pct/100)} ${wcirc}`} strokeLinecap="round"/>
+                              </svg>
+                              <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
+                                <div style={{fontSize:11,fontWeight:900,color:col}}>{w.km>0?w.km:''}</div>
+                              </div>
+                            </div>
+                            <div style={{fontSize:9,color:C.muted,marginTop:4}}>{w.label}</div>
+                            <div style={{fontSize:9,color:col}}>{w.km}/{w.goal}km</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
             {/* 12 week plan with checkboxes */}
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📋 12-Week Plan</div>
@@ -221,77 +287,6 @@ export default function Home() {
             </div>
           </div>
         )}
-	{/* Monthly km progress */}
-<div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
-  <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:16}}>📅 May — Monthly km Goal</div>
-  
-  {/* Big monthly ring */}
-  {(() => {
-    const WEEKS = [
-      {label:'W1',km:13,goal:25},
-      {label:'W2',km:11,goal:25},
-      {label:'W3',km:22.15,goal:25},
-      {label:'W4',km:0,goal:25},
-    ]
-    const totalKm = 46.15
-    const monthGoal = 100
-    const monthPct = Math.min((totalKm/monthGoal)*100, 100)
-    const r = 52
-    const circ = 2*Math.PI*r
-
-    return (
-      <div>
-        {/* Big ring */}
-        <div style={{display:'flex',alignItems:'center',gap:20,marginBottom:20}}>
-          <div style={{position:'relative',width:120,height:120,flexShrink:0}}>
-            <svg width="120" height="120" style={{transform:'rotate(-90deg)'}}>
-              <circle cx="60" cy="60" r={r} fill="none" stroke={C.border} strokeWidth="10"/>
-              <circle cx="60" cy="60" r={r} fill="none" stroke={C.run} strokeWidth="10"
-                strokeDasharray={`${circ*(monthPct/100)} ${circ}`} strokeLinecap="round"
-                style={{transition:'stroke-dasharray 1s ease'}}/>
-            </svg>
-            <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
-              <div style={{fontSize:20,fontWeight:900,color:C.run}}>{totalKm}</div>
-              <div style={{fontSize:9,color:C.muted}}>km</div>
-            </div>
-          </div>
-          <div>
-            <div style={{fontSize:28,fontWeight:900,color:C.run}}>{Math.round(monthPct)}%</div>
-            <div style={{fontSize:11,color:C.muted}}>of {monthGoal}km goal</div>
-            <div style={{fontSize:11,color:C.green,marginTop:4}}>+{(monthGoal-totalKm).toFixed(1)}km to go</div>
-            <div style={{fontSize:10,color:C.muted,marginTop:4}}>May 2026</div>
-          </div>
-        </div>
-
-        {/* 4 weekly small rings */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
-          {WEEKS.map((w,i) => {
-            const pct = Math.min((w.km/w.goal)*100, 100)
-            const wr = 26
-            const wcirc = 2*Math.PI*wr
-            const col = w.km>=w.goal ? C.green : i===2 ? C.run : w.km>0 ? C.yellow : C.muted
-            return (
-              <div key={i} style={{textAlign:'center'}}>
-                <div style={{position:'relative',width:64,height:64,margin:'0 auto'}}>
-                  <svg width="64" height="64" style={{transform:'rotate(-90deg)'}}>
-                    <circle cx="32" cy="32" r={wr} fill="none" stroke={C.border} strokeWidth="7"/>
-                    <circle cx="32" cy="32" r={wr} fill="none" stroke={col} strokeWidth="7"
-                      strokeDasharray={`${wcirc*(pct/100)} ${wcirc}`} strokeLinecap="round"/>
-                  </svg>
-                  <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
-                    <div style={{fontSize:11,fontWeight:900,color:col}}>{w.km>0?w.km:''}</div>
-                  </div>
-                </div>
-                <div style={{fontSize:9,color:C.muted,marginTop:4}}>{w.label}</div>
-                <div style={{fontSize:9,color:col}}>{w.km}/{w.goal}km</div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  })()}
-</div>
 
         {/* SMOKE */}
         {tab===2 && (
