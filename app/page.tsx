@@ -310,7 +310,7 @@ export default function Home() {
                           color: hasData ? '#000' : C.muted,
                           opacity: isFuture ? 0.3 : 1,
                         }}>
-                          {hasData ? (day.net < 0 ? Math.abs(day.net) : `+${day.net}`) : ''}
+                          {hasData && day.net !== null ? (day.net < 0 ? Math.abs(day.net) : `+${day.net}`) : ''}
                         </div>
                       )
                     })}
