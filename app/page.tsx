@@ -5,7 +5,8 @@ const C = {
   bg: '#080810', card: '#0f0f1c', border: '#1a1a2e',
   cal: '#f97316', run: '#22d3ee', smoke: '#818cf8',
   mental: '#a78bfa', green: '#4ade80', yellow: '#facc15',
-  pink: '#f472b6', text: '#e2e8f0', muted: '#475569', dim: '#1e2030'
+  pink: '#f472b6', text: '#e2e8f0', muted: '#475569', dim: '#1e2030',
+  food: '#34d399',
 }
 
 const PLAN = [
@@ -28,11 +29,13 @@ const SESS_TYPES = ['speed','easy','tempo','long']
 export default function Home() {
   const [tab, setTab] = useState(0)
   const [calories, setCalories] = useState<any>({})
+  const [dietaryCalories, setDietaryCalories] = useState<any>(null)
   const [runs, setRuns] = useState<any[]>([])
   const [cigs, setCigs] = useState(0)
   const [cigGoal] = useState(10)
   const [checks, setChecks] = useState<Record<string,boolean>>({})
   const [calGoal] = useState(600)
+  const [eatGoal] = useState(2200)
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState('')
 
@@ -45,6 +48,7 @@ export default function Home() {
         fetch('/api/plan').then(r => r.json()),
       ])
       if (health.calories?.calories_kcal) setCalories(health.calories)
+      if (health.dietaryCalories?.calories_kcal) setDietaryCalories(health.dietaryCalories)
       if (health.runs?.length) setRuns(health.runs)
       setCigs(cigRes.count || 0)
       setChecks(planRes.checks || {})
@@ -72,11 +76,35 @@ export default function Home() {
     await fetch('/api/plan', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key, checked})})
   }
 
-  const kcal = calories.calories_kcal || 304
+  const kcal = calories.calories_kcal || 0
+  const eaten = dietaryCalories?.calories_kcal || 0
+  const net = eaten - kcal
   const calPct = Math.min(Math.round((kcal/calGoal)*100), 100)
+  const eatPct = Math.min(Math.round((eaten/eatGoal)*100), 100)
   const cigPct = Math.min(Math.round((cigs/cigGoal)*100), 100)
   const TABS = ['🔥','🏃','🚭','🤖']
   const TABNAMES = ['Calories','Running','Smoke','Coach']
+
+  // Triple ring config
+  const ringSize = 220
+  const cx = ringSize / 2
+  const cy = ringSize / 2
+  const ringStroke = 14
+  const ringGap = 4
+  const rOuter = 95
+  const rMiddle = rOuter - ringStroke - ringGap
+  const rInner = rMiddle - ringStroke - ringGap
+  const circOuter = 2 * Math.PI * rOuter
+  const circMiddle = 2 * Math.PI * rMiddle
+  const circInner = 2 * Math.PI * rInner
+
+  // Net balance ring: shows how close to "balanced" you are
+  // Negative net (deficit) = green ring fills up, positive (surplus) = red
+  const balanceTarget = 500 // deficit goal for weight loss
+  const balancePct = eaten > 0 && kcal > 0
+    ? Math.min(Math.abs(net) / balanceTarget * 100, 100)
+    : 0
+  const balanceColor = net < 0 ? C.green : net > 0 ? '#ef4444' : C.muted
 
   return (
     <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'monospace',paddingBottom:80}}>
@@ -98,31 +126,96 @@ export default function Home() {
         {/* CALORIES */}
         {tab===0 && (
           <div>
+            {/* Triple-ring card — Apple Activity style */}
             <div style={{background:C.card,border:`1px solid ${C.cal}30`,borderRadius:14,padding:20,marginBottom:12}}>
-              <div style={{fontSize:10,color:C.cal,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>🔥 Active Calories Today</div>
-              <div style={{display:'flex',alignItems:'center',gap:20}}>
-                <svg width="80" height="80" style={{transform:'rotate(-90deg)',flexShrink:0}}>
-                  <circle cx="40" cy="40" r="32" fill="none" stroke={C.border} strokeWidth="8"/>
-                  <circle cx="40" cy="40" r="32" fill="none" stroke={calPct>=100?C.green:C.cal} strokeWidth="8"
-                    strokeDasharray={`${2*Math.PI*32*(calPct/100)} ${2*Math.PI*32}`} strokeLinecap="round"
-                    style={{transition:'stroke-dasharray 1s ease'}}/>
-                </svg>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:48,fontWeight:900,color:C.cal,lineHeight:1}}>{kcal.toLocaleString()}</div>
-                  <div style={{fontSize:11,color:C.muted,marginTop:4}}>of {calGoal} kcal goal · {calPct}%</div>
-                  <div style={{height:5,background:C.border,borderRadius:3,marginTop:10,overflow:'hidden'}}>
-                    <div style={{height:'100%',width:`${calPct}%`,background:calPct>=100?C.green:C.cal,borderRadius:3,transition:'width 1s ease'}}/>
+              <div style={{fontSize:10,color:C.cal,textTransform:'uppercase',letterSpacing:2,marginBottom:16,textAlign:'center'}}>⚡ Energy Today</div>
+              
+              <div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
+                <div style={{position:'relative',width:ringSize,height:ringSize}}>
+                  <svg width={ringSize} height={ringSize} style={{transform:'rotate(-90deg)'}}>
+                    {/* Outer ring — Eaten */}
+                    <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={C.food+'20'} strokeWidth={ringStroke}/>
+                    <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={C.food} strokeWidth={ringStroke}
+                      strokeDasharray={`${circOuter*(eatPct/100)} ${circOuter}`} strokeLinecap="round"
+                      style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 6px ${C.food}80)`}}/>
+                    
+                    {/* Middle ring — Burned */}
+                    <circle cx={cx} cy={cy} r={rMiddle} fill="none" stroke={C.cal+'20'} strokeWidth={ringStroke}/>
+                    <circle cx={cx} cy={cy} r={rMiddle} fill="none" stroke={C.cal} strokeWidth={ringStroke}
+                      strokeDasharray={`${circMiddle*(calPct/100)} ${circMiddle}`} strokeLinecap="round"
+                      style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 6px ${C.cal}80)`}}/>
+                    
+                    {/* Inner ring — Balance */}
+                    <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={balanceColor+'20'} strokeWidth={ringStroke}/>
+                    <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={balanceColor} strokeWidth={ringStroke}
+                      strokeDasharray={`${circInner*(balancePct/100)} ${circInner}`} strokeLinecap="round"
+                      style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 6px ${balanceColor}80)`}}/>
+                  </svg>
+                  
+                  {/* Center text */}
+                  <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
+                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>NET</div>
+                    <div style={{fontSize:28,fontWeight:900,color:balanceColor,lineHeight:1}}>
+                      {eaten > 0 && kcal > 0 ? `${net > 0 ? '+' : ''}${net}` : '—'}
+                    </div>
+                    <div style={{fontSize:9,color:C.muted,marginTop:2}}>kcal</div>
                   </div>
-                  <div style={{fontSize:11,color:C.muted,marginTop:5}}>{calPct>=100?'✅ Goal reached!':`${calGoal-kcal} kcal to go`}</div>
                 </div>
               </div>
+
+              {/* Legend with stats */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${C.food}20`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
+                    <div style={{width:8,height:8,borderRadius:'50%',background:C.food}}/>
+                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>EATEN</div>
+                  </div>
+                  <div style={{fontSize:18,fontWeight:900,color:C.food}}>{eaten.toLocaleString()}</div>
+                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>/ {eatGoal}</div>
+                </div>
+                <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${C.cal}20`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
+                    <div style={{width:8,height:8,borderRadius:'50%',background:C.cal}}/>
+                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>BURNED</div>
+                  </div>
+                  <div style={{fontSize:18,fontWeight:900,color:C.cal}}>{kcal.toLocaleString()}</div>
+                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>/ {calGoal}</div>
+                </div>
+                <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${balanceColor}20`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
+                    <div style={{width:8,height:8,borderRadius:'50%',background:balanceColor}}/>
+                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>BALANCE</div>
+                  </div>
+                  <div style={{fontSize:18,fontWeight:900,color:balanceColor}}>
+                    {eaten > 0 && kcal > 0 ? (net < 0 ? 'DEF' : net > 0 ? 'SUR' : '0') : '—'}
+                  </div>
+                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>
+                    {eaten > 0 && kcal > 0 ? `${Math.abs(net)} kcal` : 'no data'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status line */}
+              <div style={{
+                marginTop:14,padding:'8px 12px',borderRadius:8,
+                background:eaten === 0 ? C.dim : (net < 0 ? C.green+'15' : '#ef444415'),
+                fontSize:11,textAlign:'center',
+                color:eaten === 0 ? C.muted : (net < 0 ? C.green : '#ef4444')
+              }}>
+                {eaten === 0 ? '🍽️ Log food in Kalorické Tabulky to see balance' 
+                  : kcal === 0 ? '⌛ Waiting for active calories sync'
+                  : net < 0 ? `✅ ${Math.abs(net)} kcal deficit — on track`
+                  : `⚠️ ${net} kcal surplus today`}
+              </div>
             </div>
+
+            {/* Meta grid */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               {[
                 {label:'Date',val:calories.date||'—',color:C.run},
-                {label:'Data points',val:(calories.entries||421).toLocaleString(),color:C.mental},
-                {label:'Last sync',val:calories.timestamp?new Date(calories.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—',color:C.yellow},
-                {label:'Source',val:'Apple Watch',color:C.green},
+                {label:'Burned sync',val:calories.timestamp?new Date(calories.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—',color:C.cal},
+                {label:'Eaten sync',val:dietaryCalories?.timestamp?new Date(dietaryCalories.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—',color:C.food},
+                {label:'Source',val:'HAE + KT',color:C.green},
               ].map(m=>(
                 <div key={m.label} style={{background:C.dim,borderRadius:10,padding:14}}>
                   <div style={{fontSize:9,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{m.label}</div>
@@ -335,6 +428,8 @@ export default function Home() {
               <div style={{fontSize:12,color:C.text,lineHeight:1.7}}>
                 Your stats right now:<br/>
                 🔥 <span style={{color:C.cal}}>{kcal} kcal</span> active today<br/>
+                🍽️ <span style={{color:C.food}}>{eaten > 0 ? `${eaten} kcal` : 'Not logged'}</span> eaten<br/>
+                ⚖️ <span style={{color:balanceColor}}>{eaten > 0 && kcal > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
                 🏃 <span style={{color:C.run}}>PB 24:32</span> · Goal 22:00<br/>
                 🚭 <span style={{color:C.smoke}}>{cigs}/{cigGoal}</span> cigarettes<br/>
                 📅 <span style={{color:C.green}}>Week 5</span> of 12-week plan
