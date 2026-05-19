@@ -6,25 +6,24 @@ const C = {
   cal: '#f97316', run: '#22d3ee', smoke: '#818cf8',
   mental: '#a78bfa', green: '#4ade80', yellow: '#facc15',
   pink: '#f472b6', text: '#e2e8f0', muted: '#475569', dim: '#1e2030',
-  food: '#34d399',
+  food: '#34d399', basal: '#94a3b8',
 }
 
-// Deficit color scale
-const BRIGHT_BLUE = '#38bdf8'  // 1000+ deficit
-const DEEP_GREEN = '#22c55e'   // 500-1000 deficit
-const YELLOW = '#facc15'       // 200-500 deficit
-const AMBER = '#fb923c'        // 0-200 deficit
-const RED = '#ef4444'          // surplus
-const EMPTY = '#1e2030'        // no data
+const BRIGHT_BLUE = '#38bdf8'
+const DEEP_GREEN = '#22c55e'
+const YELLOW = '#facc15'
+const AMBER = '#fb923c'
+const RED = '#ef4444'
+const EMPTY = '#1e2030'
 
 function netColor(net: number | null): string {
   if (net === null) return EMPTY
-  const deficit = -net // positive = deficit
+  const deficit = -net
   if (deficit >= 1000) return BRIGHT_BLUE
   if (deficit >= 500) return DEEP_GREEN
   if (deficit >= 200) return YELLOW
   if (deficit >= 0) return AMBER
-  return RED // surplus
+  return RED
 }
 
 const PLAN = [
@@ -44,7 +43,6 @@ const PLAN = [
 
 const SESS_TYPES = ['speed','easy','tempo','long']
 
-// ISO week number
 function isoWeek(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
   const dayNum = date.getUTCDay() || 7
@@ -53,7 +51,6 @@ function isoWeek(d: Date): number {
   return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
 
-// Get Monday of the week containing the given date
 function mondayOf(d: Date): Date {
   const x = new Date(d)
   const day = x.getDay()
@@ -77,20 +74,28 @@ export default function Home() {
   const [history, setHistory] = useState<any[]>([])
   const [runs, setRuns] = useState<any[]>([])
   const [cigs, setCigs] = useState(0)
-  const [cigGoal] = useState(10)
   const [checks, setChecks] = useState<Record<string,boolean>>({})
-  const [calGoal] = useState(600)
-  const [eatGoal] = useState(2200)
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState('')
+
+  // Settings (basal, goals) — fetched from API
+  const [settings, setSettings] = useState({ basalCalories: 1800, calGoal: 600, eatGoal: 2200, cigGoal: 10 })
+  const [editingBasal, setEditingBasal] = useState(false)
+  const [basalInput, setBasalInput] = useState('1800')
+
+  const basalCalories = settings.basalCalories
+  const calGoal = settings.calGoal
+  const eatGoal = settings.eatGoal
+  const cigGoal = settings.cigGoal
 
   const fetchAll = useCallback(async () => {
     setSyncing(true)
     try {
-      const [health, cigRes, planRes] = await Promise.all([
+      const [health, cigRes, planRes, settingsRes] = await Promise.all([
         fetch('/api/health').then(r => r.json()),
         fetch('/api/cigs').then(r => r.json()),
         fetch('/api/plan').then(r => r.json()),
+        fetch('/api/settings').then(r => r.json()),
       ])
       if (health.calories?.calories_kcal) setCalories(health.calories)
       if (health.dietaryCalories?.calories_kcal) setDietaryCalories(health.dietaryCalories)
@@ -98,12 +103,33 @@ export default function Home() {
       if (health.runs?.length) setRuns(health.runs)
       setCigs(cigRes.count || 0)
       setChecks(planRes.checks || {})
+      if (settingsRes) {
+        setSettings(settingsRes)
+        setBasalInput(String(settingsRes.basalCalories))
+      }
       setLastSync(new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}))
     } catch(e) {}
     setSyncing(false)
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  async function saveBasal() {
+    const v = parseInt(basalInput, 10)
+    if (isNaN(v) || v < 800 || v > 4000) {
+      setBasalInput(String(basalCalories))
+      setEditingBasal(false)
+      return
+    }
+    const res = await fetch('/api/settings', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ basalCalories: v }),
+    })
+    const data = await res.json()
+    setSettings(data)
+    setEditingBasal(false)
+  }
 
   async function addCig() {
     const res = await fetch('/api/cigs', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'increment'})})
@@ -124,7 +150,8 @@ export default function Home() {
 
   const kcal = calories.calories_kcal || 0
   const eaten = dietaryCalories?.calories_kcal || 0
-  const net = eaten - kcal
+  // NET = eaten − burned − basal
+  const net = eaten - kcal - basalCalories
   const calPct = Math.min(Math.round((kcal/calGoal)*100), 100)
   const eatPct = Math.min(Math.round((eaten/eatGoal)*100), 100)
   const cigPct = Math.min(Math.round((cigs/cigGoal)*100), 100)
@@ -144,15 +171,13 @@ export default function Home() {
   const circInner = 2 * Math.PI * rInner
 
   const balanceTarget = 500
-  const balancePct = eaten > 0 && kcal > 0
+  // Show balance ring as long as eaten exists (basal is always known now)
+  const balancePct = eaten > 0
     ? Math.min(Math.abs(net) / balanceTarget * 100, 100)
     : 0
   const balanceColor = net < 0 ? C.green : net > 0 ? '#ef4444' : C.muted
 
-  // Build weekly grid from history (last 30 days, anchored to most recent Monday)
-  // Map: date string -> entry
   const histMap = new Map(history.map(h => [h.date, h]))
-  // Build last 4 weeks + current week if it has data — start from Monday of this week, go back 4 weeks
   const thisMonday = mondayOf(new Date())
   const weeks: { weekNum: number; days: ({ date: string; net: number | null } | null)[] }[] = []
   for (let w = 4; w >= 0; w--) {
@@ -165,11 +190,11 @@ export default function Home() {
       day.setDate(day.getDate() + d)
       const dateStr = ymd(day)
       const entry = histMap.get(dateStr)
-      // Only show net if BOTH eaten and burned exist
       const hasData = entry && entry.eaten > 0 && entry.burned > 0
+      // History net also factors in basal
       days.push({
         date: dateStr,
-        net: hasData ? entry.net : null,
+        net: hasData ? (entry.eaten - entry.burned - basalCalories) : null,
       })
     }
     weeks.push({ weekNum, days })
@@ -219,52 +244,85 @@ export default function Home() {
                   <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
                     <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>NET</div>
                     <div style={{fontSize:28,fontWeight:900,color:balanceColor,lineHeight:1}}>
-                      {eaten > 0 && kcal > 0 ? `${net > 0 ? '+' : ''}${net}` : '—'}
+                      {eaten > 0 ? `${net > 0 ? '+' : ''}${net}` : '—'}
                     </div>
                     <div style={{fontSize:9,color:C.muted,marginTop:2}}>kcal</div>
                   </div>
                 </div>
               </div>
 
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-                <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${C.food}20`}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
-                    <div style={{width:8,height:8,borderRadius:'50%',background:C.food}}/>
-                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>EATEN</div>
+              {/* Stat boxes — now 4 columns including basal */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6}}>
+                <div style={{textAlign:'center',padding:'8px 4px',background:C.dim,borderRadius:10,border:`1px solid ${C.food}20`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,marginBottom:3}}>
+                    <div style={{width:6,height:6,borderRadius:'50%',background:C.food}}/>
+                    <div style={{fontSize:8,color:C.muted,letterSpacing:1}}>EATEN</div>
                   </div>
-                  <div style={{fontSize:18,fontWeight:900,color:C.food}}>{eaten.toLocaleString()}</div>
-                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>/ {eatGoal}</div>
+                  <div style={{fontSize:15,fontWeight:900,color:C.food}}>{eaten.toLocaleString()}</div>
+                  <div style={{fontSize:8,color:C.muted,marginTop:1}}>/ {eatGoal}</div>
                 </div>
-                <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${C.cal}20`}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
-                    <div style={{width:8,height:8,borderRadius:'50%',background:C.cal}}/>
-                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>BURNED</div>
+                <div style={{textAlign:'center',padding:'8px 4px',background:C.dim,borderRadius:10,border:`1px solid ${C.cal}20`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,marginBottom:3}}>
+                    <div style={{width:6,height:6,borderRadius:'50%',background:C.cal}}/>
+                    <div style={{fontSize:8,color:C.muted,letterSpacing:1}}>BURNED</div>
                   </div>
-                  <div style={{fontSize:18,fontWeight:900,color:C.cal}}>{kcal.toLocaleString()}</div>
-                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>/ {calGoal}</div>
+                  <div style={{fontSize:15,fontWeight:900,color:C.cal}}>{kcal.toLocaleString()}</div>
+                  <div style={{fontSize:8,color:C.muted,marginTop:1}}>/ {calGoal}</div>
                 </div>
-                <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${balanceColor}20`}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
-                    <div style={{width:8,height:8,borderRadius:'50%',background:balanceColor}}/>
-                    <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>BALANCE</div>
+                <div 
+                  onClick={() => !editingBasal && setEditingBasal(true)}
+                  style={{textAlign:'center',padding:'8px 4px',background:C.dim,borderRadius:10,border:`1px solid ${C.basal}20`,cursor:'pointer'}}
+                >
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,marginBottom:3}}>
+                    <div style={{width:6,height:6,borderRadius:'50%',background:C.basal}}/>
+                    <div style={{fontSize:8,color:C.muted,letterSpacing:1}}>BASAL ✎</div>
                   </div>
-                  <div style={{fontSize:18,fontWeight:900,color:balanceColor}}>
-                    {eaten > 0 && kcal > 0 ? (net < 0 ? 'DEF' : net > 0 ? 'SUR' : '0') : '—'}
+                  {editingBasal ? (
+                    <input
+                      type="number"
+                      value={basalInput}
+                      onChange={e => setBasalInput(e.target.value)}
+                      onBlur={saveBasal}
+                      onKeyDown={e => { if (e.key === 'Enter') saveBasal() }}
+                      autoFocus
+                      style={{
+                        width:'100%',fontSize:15,fontWeight:900,color:C.basal,
+                        background:'transparent',border:`1px solid ${C.basal}50`,
+                        borderRadius:4,textAlign:'center',padding:'2px 0',
+                        fontFamily:'monospace',
+                      }}
+                    />
+                  ) : (
+                    <div style={{fontSize:15,fontWeight:900,color:C.basal}}>{basalCalories.toLocaleString()}</div>
+                  )}
+                  <div style={{fontSize:8,color:C.muted,marginTop:1}}>BMR</div>
+                </div>
+                <div style={{textAlign:'center',padding:'8px 4px',background:C.dim,borderRadius:10,border:`1px solid ${balanceColor}20`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,marginBottom:3}}>
+                    <div style={{width:6,height:6,borderRadius:'50%',background:balanceColor}}/>
+                    <div style={{fontSize:8,color:C.muted,letterSpacing:1}}>NET</div>
                   </div>
-                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>
-                    {eaten > 0 && kcal > 0 ? `${Math.abs(net)} kcal` : 'no data'}
+                  <div style={{fontSize:15,fontWeight:900,color:balanceColor}}>
+                    {eaten > 0 ? (net < 0 ? 'DEF' : net > 0 ? 'SUR' : '0') : '—'}
+                  </div>
+                  <div style={{fontSize:8,color:C.muted,marginTop:1}}>
+                    {eaten > 0 ? `${Math.abs(net)} kcal` : 'no data'}
                   </div>
                 </div>
               </div>
 
+              {/* Formula hint */}
+              <div style={{marginTop:10,padding:'6px 10px',borderRadius:6,background:C.dim,fontSize:9,color:C.muted,textAlign:'center',letterSpacing:0.5}}>
+                NET = EATEN − BURNED − BASAL
+              </div>
+
               <div style={{
-                marginTop:14,padding:'8px 12px',borderRadius:8,
+                marginTop:10,padding:'8px 12px',borderRadius:8,
                 background:eaten === 0 ? C.dim : (net < 0 ? C.green+'15' : '#ef444415'),
                 fontSize:11,textAlign:'center',
                 color:eaten === 0 ? C.muted : (net < 0 ? C.green : '#ef4444')
               }}>
                 {eaten === 0 ? '🍽️ Log food in Kalorické Tabulky to see balance' 
-                  : kcal === 0 ? '⌛ Waiting for active calories sync'
                   : net < 0 ? `✅ ${Math.abs(net)} kcal deficit — on track`
                   : `⚠️ ${net} kcal surplus today`}
               </div>
@@ -274,7 +332,6 @@ export default function Home() {
             <div style={{background:C.card,border:`1px solid ${C.cal}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.cal,textTransform:'uppercase',letterSpacing:2,marginBottom:14}}>📊 30-Day History</div>
               
-              {/* Header row */}
               <div style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr)',gap:4,marginBottom:6}}>
                 <div style={{fontSize:8,color:C.muted,letterSpacing:1,textAlign:'center'}}>WK</div>
                 {DAYS_LABEL.map(d => (
@@ -282,7 +339,6 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Week rows */}
               {weeks.map((week, wi) => {
                 const todayStr = ymd(new Date())
                 return (
@@ -291,7 +347,6 @@ export default function Home() {
                       {week.weekNum}
                     </div>
                     {week.days.map((day, di) => {
-                      if (!day) return <div key={di}/>
                       const color = netColor(day.net)
                       const isToday = day.date === todayStr
                       const isFuture = new Date(day.date) > new Date(todayStr)
@@ -310,7 +365,7 @@ export default function Home() {
                           color: hasData ? '#000' : C.muted,
                           opacity: isFuture ? 0.3 : 1,
                         }}>
-                          {hasData && day.net !== null ? (day.net < 0 ? Math.abs(day.net) : `+${day.net}`) : ''}
+                          {hasData ? (day.net! < 0 ? Math.abs(day.net!) : `+${day.net}`) : ''}
                         </div>
                       )
                     })}
@@ -318,7 +373,6 @@ export default function Home() {
                 )
               })}
 
-              {/* Legend */}
               <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.dim}`}}>
                 <div style={{fontSize:8,color:C.muted,letterSpacing:1,marginBottom:6}}>DEFICIT SCALE</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -339,7 +393,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Meta grid */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               {[
                 {label:'Date',val:calories.date||'—',color:C.run},
@@ -555,7 +608,8 @@ export default function Home() {
                 Your stats right now:<br/>
                 🔥 <span style={{color:C.cal}}>{kcal} kcal</span> active today<br/>
                 🍽️ <span style={{color:C.food}}>{eaten > 0 ? `${eaten} kcal` : 'Not logged'}</span> eaten<br/>
-                ⚖️ <span style={{color:balanceColor}}>{eaten > 0 && kcal > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
+                💤 <span style={{color:C.basal}}>{basalCalories} kcal</span> basal<br/>
+                ⚖️ <span style={{color:balanceColor}}>{eaten > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
                 🏃 <span style={{color:C.run}}>PB 24:32</span> · Goal 22:00<br/>
                 🚭 <span style={{color:C.smoke}}>{cigs}/{cigGoal}</span> cigarettes<br/>
                 📅 <span style={{color:C.green}}>Week 5</span> of 12-week plan
