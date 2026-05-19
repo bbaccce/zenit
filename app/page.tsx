@@ -347,6 +347,7 @@ export default function Home() {
                       {week.weekNum}
                     </div>
                     {week.days.map((day, di) => {
+                      if (!day) return <div key={di}/>
                       const color = netColor(day.net)
                       const isToday = day.date === todayStr
                       const isFuture = new Date(day.date) > new Date(todayStr)
