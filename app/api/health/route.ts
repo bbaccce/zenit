@@ -8,20 +8,46 @@ const redis = new Redis({
 
 const RUN_TYPES = ['Outdoor Run', 'Indoor Run', 'Running']
 
+function ymd(d: Date) {
+  return d.toISOString().split('T')[0]
+}
+
 export async function GET() {
-  const today = new Date().toISOString().split('T')[0]
+  const today = ymd(new Date())
   const calories = await redis.get(`calories_${today}`) || {}
   const runs = await redis.get('latest_runs') || []
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
   const dietaryCalories = await redis.get(`dietary_${today}`) || null
 
-  return NextResponse.json({ calories, runs, cigs, plan, dietaryCalories })
+  // Build 30 days of history
+  const days: string[] = []
+  for (let i = 0; i < 30; i++) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    days.push(ymd(d))
+  }
+
+  const calKeys = days.map(d => `calories_${d}`)
+  const dietKeys = days.map(d => `dietary_${d}`)
+
+  const [calVals, dietVals] = await Promise.all([
+    redis.mget<any[]>(...calKeys),
+    redis.mget<any[]>(...dietKeys),
+  ])
+
+  const history = days.map((date, i) => {
+    const burned = calVals[i]?.calories_kcal || 0
+    const eaten = dietVals[i]?.calories_kcal || 0
+    return { date, burned, eaten, net: eaten - burned }
+  })
+
+  return NextResponse.json({ calories, runs, cigs, plan, dietaryCalories, history })
 }
 
 export async function POST(req: Request) {
   const body = await req.json()
-  const today = new Date().toISOString().split('T')[0]
+  const today = ymd(new Date())
 
   // ── WORKOUTS ──────────────────────────────────────────────
   if (body.data?.workouts) {
@@ -66,7 +92,7 @@ export async function POST(req: Request) {
       })
     }
 
-    // Dietary calories eaten (from Kalorické Tabulky → Apple Health)
+    // Dietary calories eaten
     const dietary = metrics.find((m: any) =>
       m.name === 'dietary_energy' ||
       m.name === 'dietaryEnergyConsumed' ||

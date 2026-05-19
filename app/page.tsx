@@ -9,6 +9,24 @@ const C = {
   food: '#34d399',
 }
 
+// Deficit color scale
+const BRIGHT_BLUE = '#38bdf8'  // 1000+ deficit
+const DEEP_GREEN = '#22c55e'   // 500-1000 deficit
+const YELLOW = '#facc15'       // 200-500 deficit
+const AMBER = '#fb923c'        // 0-200 deficit
+const RED = '#ef4444'          // surplus
+const EMPTY = '#1e2030'        // no data
+
+function netColor(net: number | null): string {
+  if (net === null) return EMPTY
+  const deficit = -net // positive = deficit
+  if (deficit >= 1000) return BRIGHT_BLUE
+  if (deficit >= 500) return DEEP_GREEN
+  if (deficit >= 200) return YELLOW
+  if (deficit >= 0) return AMBER
+  return RED // surplus
+}
+
 const PLAN = [
   {w:1,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km',done:true},
   {w:2,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km',done:true},
@@ -26,10 +44,37 @@ const PLAN = [
 
 const SESS_TYPES = ['speed','easy','tempo','long']
 
+// ISO week number
+function isoWeek(d: Date): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayNum = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+}
+
+// Get Monday of the week containing the given date
+function mondayOf(d: Date): Date {
+  const x = new Date(d)
+  const day = x.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  x.setDate(x.getDate() + diff)
+  x.setHours(0,0,0,0)
+  return x
+}
+
+function ymd(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth()+1).padStart(2,'0')
+  const dd = String(d.getDate()).padStart(2,'0')
+  return `${y}-${m}-${dd}`
+}
+
 export default function Home() {
   const [tab, setTab] = useState(0)
   const [calories, setCalories] = useState<any>({})
   const [dietaryCalories, setDietaryCalories] = useState<any>(null)
+  const [history, setHistory] = useState<any[]>([])
   const [runs, setRuns] = useState<any[]>([])
   const [cigs, setCigs] = useState(0)
   const [cigGoal] = useState(10)
@@ -49,6 +94,7 @@ export default function Home() {
       ])
       if (health.calories?.calories_kcal) setCalories(health.calories)
       if (health.dietaryCalories?.calories_kcal) setDietaryCalories(health.dietaryCalories)
+      if (health.history) setHistory(health.history)
       if (health.runs?.length) setRuns(health.runs)
       setCigs(cigRes.count || 0)
       setChecks(planRes.checks || {})
@@ -85,7 +131,6 @@ export default function Home() {
   const TABS = ['🔥','🏃','🚭','🤖']
   const TABNAMES = ['Calories','Running','Smoke','Coach']
 
-  // Triple ring config
   const ringSize = 220
   const cx = ringSize / 2
   const cy = ringSize / 2
@@ -98,18 +143,43 @@ export default function Home() {
   const circMiddle = 2 * Math.PI * rMiddle
   const circInner = 2 * Math.PI * rInner
 
-  // Net balance ring: shows how close to "balanced" you are
-  // Negative net (deficit) = green ring fills up, positive (surplus) = red
-  const balanceTarget = 500 // deficit goal for weight loss
+  const balanceTarget = 500
   const balancePct = eaten > 0 && kcal > 0
     ? Math.min(Math.abs(net) / balanceTarget * 100, 100)
     : 0
   const balanceColor = net < 0 ? C.green : net > 0 ? '#ef4444' : C.muted
 
+  // Build weekly grid from history (last 30 days, anchored to most recent Monday)
+  // Map: date string -> entry
+  const histMap = new Map(history.map(h => [h.date, h]))
+  // Build last 4 weeks + current week if it has data — start from Monday of this week, go back 4 weeks
+  const thisMonday = mondayOf(new Date())
+  const weeks: { weekNum: number; days: ({ date: string; net: number | null } | null)[] }[] = []
+  for (let w = 4; w >= 0; w--) {
+    const weekStart = new Date(thisMonday)
+    weekStart.setDate(weekStart.getDate() - w * 7)
+    const weekNum = isoWeek(weekStart)
+    const days = []
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(weekStart)
+      day.setDate(day.getDate() + d)
+      const dateStr = ymd(day)
+      const entry = histMap.get(dateStr)
+      // Only show net if BOTH eaten and burned exist
+      const hasData = entry && entry.eaten > 0 && entry.burned > 0
+      days.push({
+        date: dateStr,
+        net: hasData ? entry.net : null,
+      })
+    }
+    weeks.push({ weekNum, days })
+  }
+
+  const DAYS_LABEL = ['MON','TUE','WED','THU','FRI','SAT','SUN']
+
   return (
     <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'monospace',paddingBottom:80}}>
       
-      {/* Header */}
       <div style={{background:'#0d0d1a',borderBottom:`1px solid ${C.border}`,padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <div style={{width:30,height:30,border:'2px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:15}}>Z</div>
@@ -126,33 +196,26 @@ export default function Home() {
         {/* CALORIES */}
         {tab===0 && (
           <div>
-            {/* Triple-ring card — Apple Activity style */}
+            {/* Triple rings */}
             <div style={{background:C.card,border:`1px solid ${C.cal}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.cal,textTransform:'uppercase',letterSpacing:2,marginBottom:16,textAlign:'center'}}>⚡ Energy Today</div>
               
               <div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
                 <div style={{position:'relative',width:ringSize,height:ringSize}}>
                   <svg width={ringSize} height={ringSize} style={{transform:'rotate(-90deg)'}}>
-                    {/* Outer ring — Eaten */}
                     <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={C.food+'20'} strokeWidth={ringStroke}/>
                     <circle cx={cx} cy={cy} r={rOuter} fill="none" stroke={C.food} strokeWidth={ringStroke}
                       strokeDasharray={`${circOuter*(eatPct/100)} ${circOuter}`} strokeLinecap="round"
                       style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 6px ${C.food}80)`}}/>
-                    
-                    {/* Middle ring — Burned */}
                     <circle cx={cx} cy={cy} r={rMiddle} fill="none" stroke={C.cal+'20'} strokeWidth={ringStroke}/>
                     <circle cx={cx} cy={cy} r={rMiddle} fill="none" stroke={C.cal} strokeWidth={ringStroke}
                       strokeDasharray={`${circMiddle*(calPct/100)} ${circMiddle}`} strokeLinecap="round"
                       style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 6px ${C.cal}80)`}}/>
-                    
-                    {/* Inner ring — Balance */}
                     <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={balanceColor+'20'} strokeWidth={ringStroke}/>
                     <circle cx={cx} cy={cy} r={rInner} fill="none" stroke={balanceColor} strokeWidth={ringStroke}
                       strokeDasharray={`${circInner*(balancePct/100)} ${circInner}`} strokeLinecap="round"
                       style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 6px ${balanceColor}80)`}}/>
                   </svg>
-                  
-                  {/* Center text */}
                   <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
                     <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>NET</div>
                     <div style={{fontSize:28,fontWeight:900,color:balanceColor,lineHeight:1}}>
@@ -163,7 +226,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Legend with stats */}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
                 <div style={{textAlign:'center',padding:'10px 6px',background:C.dim,borderRadius:10,border:`1px solid ${C.food}20`}}>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:4}}>
@@ -195,7 +257,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Status line */}
               <div style={{
                 marginTop:14,padding:'8px 12px',borderRadius:8,
                 background:eaten === 0 ? C.dim : (net < 0 ? C.green+'15' : '#ef444415'),
@@ -206,6 +267,74 @@ export default function Home() {
                   : kcal === 0 ? '⌛ Waiting for active calories sync'
                   : net < 0 ? `✅ ${Math.abs(net)} kcal deficit — on track`
                   : `⚠️ ${net} kcal surplus today`}
+              </div>
+            </div>
+
+            {/* HISTORY GRID */}
+            <div style={{background:C.card,border:`1px solid ${C.cal}30`,borderRadius:14,padding:20,marginBottom:12}}>
+              <div style={{fontSize:10,color:C.cal,textTransform:'uppercase',letterSpacing:2,marginBottom:14}}>📊 30-Day History</div>
+              
+              {/* Header row */}
+              <div style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr)',gap:4,marginBottom:6}}>
+                <div style={{fontSize:8,color:C.muted,letterSpacing:1,textAlign:'center'}}>WK</div>
+                {DAYS_LABEL.map(d => (
+                  <div key={d} style={{fontSize:8,color:C.muted,letterSpacing:1,textAlign:'center'}}>{d}</div>
+                ))}
+              </div>
+
+              {/* Week rows */}
+              {weeks.map((week, wi) => {
+                const todayStr = ymd(new Date())
+                return (
+                  <div key={wi} style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr)',gap:4,marginBottom:4}}>
+                    <div style={{fontSize:10,color:C.muted,fontWeight:700,textAlign:'center',alignSelf:'center'}}>
+                      {week.weekNum}
+                    </div>
+                    {week.days.map((day, di) => {
+                      const color = netColor(day.net)
+                      const isToday = day.date === todayStr
+                      const isFuture = new Date(day.date) > new Date(todayStr)
+                      const hasData = day.net !== null
+                      return (
+                        <div key={di} style={{
+                          aspectRatio:'1',
+                          background: isFuture ? 'transparent' : (hasData ? color : EMPTY),
+                          border: isToday ? `2px solid ${C.text}` : isFuture ? `1px dashed ${C.border}` : 'none',
+                          borderRadius:6,
+                          display:'flex',
+                          alignItems:'center',
+                          justifyContent:'center',
+                          fontSize:9,
+                          fontWeight:700,
+                          color: hasData ? '#000' : C.muted,
+                          opacity: isFuture ? 0.3 : 1,
+                        }}>
+                          {hasData ? (day.net < 0 ? Math.abs(day.net) : `+${day.net}`) : ''}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+
+              {/* Legend */}
+              <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.dim}`}}>
+                <div style={{fontSize:8,color:C.muted,letterSpacing:1,marginBottom:6}}>DEFICIT SCALE</div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {[
+                    {c:BRIGHT_BLUE,l:'1000+'},
+                    {c:DEEP_GREEN,l:'500-1000'},
+                    {c:YELLOW,l:'200-500'},
+                    {c:AMBER,l:'0-200'},
+                    {c:RED,l:'surplus'},
+                    {c:EMPTY,l:'no data'},
+                  ].map(item => (
+                    <div key={item.l} style={{display:'flex',alignItems:'center',gap:4}}>
+                      <div style={{width:12,height:12,background:item.c,borderRadius:3}}/>
+                      <div style={{fontSize:9,color:C.muted}}>{item.l}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -229,7 +358,6 @@ export default function Home() {
         {/* RUNNING */}
         {tab===1 && (
           <div>
-            {/* PB tracker */}
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>🎯 5K Goal Tracker</div>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
@@ -245,7 +373,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Recent runs */}
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📡 Recent Runs — Apple Watch</div>
               {runs.length===0?(
@@ -275,7 +402,6 @@ export default function Home() {
               })}
             </div>
 
-            {/* Monthly km progress */}
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:16}}>📅 May — Monthly km Goal</div>
               {(() => {
@@ -341,7 +467,6 @@ export default function Home() {
               })()}
             </div>
 
-            {/* 12 week plan with checkboxes */}
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📋 12-Week Plan</div>
               {PLAN.map(p=>{
@@ -440,7 +565,6 @@ export default function Home() {
 
       </div>
 
-      {/* Bottom nav */}
       <div style={{
         position:'fixed',bottom:0,left:0,right:0,
         background:'rgba(8,8,16,0.95)',backdropFilter:'blur(20px)',
