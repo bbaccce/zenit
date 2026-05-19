@@ -6,67 +6,91 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
+const RUN_TYPES = ['Outdoor Run', 'Indoor Run', 'Running']
+
 export async function GET() {
   const today = new Date().toISOString().split('T')[0]
   const calories = await redis.get(`calories_${today}`) || {}
   const runs = await redis.get('latest_runs') || []
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
-  return NextResponse.json({ calories, runs, cigs, plan })
+  const dietaryCalories = await redis.get(`dietary_${today}`) || null
+
+  return NextResponse.json({ calories, runs, cigs, plan, dietaryCalories })
 }
 
 export async function POST(req: Request) {
   const body = await req.json()
   const today = new Date().toISOString().split('T')[0]
-  const metrics = body.data?.metrics
-  const workouts = body.data?.workouts
 
-  // Auto-detect calories
-  if (metrics) {
-    const active = metrics.find((m: any) => m.name === 'active_energy')
+  // ── WORKOUTS ──────────────────────────────────────────────
+  if (body.data?.workouts) {
+    const runs = body.data.workouts
+      .filter((w: any) => RUN_TYPES.includes(w.name))
+      .map((w: any) => ({
+        name: w.name,
+        date: w.start?.split('T')[0] ?? today,
+        duration: w.duration,
+        distance: w.distance,
+        pace: w.pace,
+      }))
+      .slice(0, 10)
+
+    await redis.set('latest_runs', runs)
+    return NextResponse.json({ ok: true, type: 'runs', count: runs.length })
+  }
+
+  // ── METRICS ───────────────────────────────────────────────
+  if (body.data?.metrics) {
+    const metrics = body.data.metrics
+
+    // Active calories burned
+    const active = metrics.find((m: any) =>
+      m.name === 'active_energy' || m.name === 'activeEnergyBurned'
+    )
+
     if (active) {
       const isKj = active.units === 'kJ'
-
-      // Deduplicate overlapping entries from Health Auto Export
       const seen = new Map<string, number>()
       for (const d of active.data) {
         const key = d.date ?? d.startDate ?? d.dateComponents ?? JSON.stringify(d)
-        const val = isKj ? d.qty * 0.239 : d.qty
-        if (!seen.has(key) || seen.get(key)! < val) {
-          seen.set(key, val)
-        }
+        const val = isKj ? d.qty / 4.184 : d.qty
+        if (!seen.has(key) || seen.get(key)! < val) seen.set(key, val)
       }
       const total = Array.from(seen.values()).reduce((s, v) => s + v, 0)
-
       await redis.set(`calories_${today}`, {
         calories_kcal: Math.round(total),
-        entries: seen.size,
+        entries: active.data.length,
         date: today,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       })
     }
-  }
 
-  // Auto-detect runs (unchanged)
-  if (workouts) {
-    const RUN_TYPES = ['Outdoor Run', 'Indoor Run', 'Running']
-    const runs = workouts.filter((w: any) =>
-      w.distance?.units === 'km' && RUN_TYPES.includes(w.name)
-    ).map((w: any) => {
-      const secs = w.duration / w.distance.qty
-      return {
-        date: w.start?.split(' ')[0],
-        distance_km: Math.round(w.distance.qty * 100) / 100,
-        duration_min: Math.round(w.duration / 60),
-        pace_per_km: `${Math.floor(secs/60)}:${String(Math.round(secs%60)).padStart(2,'0')}`,
-        avg_hr: Math.round(w.heartRate?.avg?.qty || 0),
-        max_hr: Math.round(w.heartRate?.max?.qty || 0),
-        calories_kcal: Math.round((w.activeEnergyBurned?.qty || 0) * 0.239),
-        name: w.name,
+    // Dietary calories eaten (from Kalorické Tabulky → Apple Health)
+    const dietary = metrics.find((m: any) =>
+      m.name === 'dietary_energy' ||
+      m.name === 'dietaryEnergyConsumed' ||
+      m.name === 'Dietary Energy'
+    )
+
+    if (dietary) {
+      const isKj = dietary.units === 'kJ'
+      const seen = new Map<string, number>()
+      for (const d of dietary.data) {
+        const key = d.date ?? d.startDate ?? d.dateComponents ?? JSON.stringify(d)
+        const val = isKj ? d.qty / 4.184 : d.qty
+        if (!seen.has(key) || seen.get(key)! < val) seen.set(key, val)
       }
-    })
-    if (runs.length > 0) await redis.set('latest_runs', runs)
+      const total = Array.from(seen.values()).reduce((s, v) => s + v, 0)
+      await redis.set(`dietary_${today}`, {
+        calories_kcal: Math.round(total),
+        date: today,
+        timestamp: new Date().toISOString(),
+      })
+    }
+
+    return NextResponse.json({ ok: true, type: 'metrics' })
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ error: 'unrecognized payload' }, { status: 400 })
 }
