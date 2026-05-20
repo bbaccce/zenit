@@ -14,8 +14,9 @@ function ymd(d: Date) {
 
 export async function GET() {
   const today = ymd(new Date())
+  const monthKey = `runs_${today.slice(0, 7)}`
   const calories = await redis.get(`calories_${today}`) || {}
-  const runs = await redis.get('latest_runs') || []
+  const runs = (await redis.get<any[]>(monthKey)) ?? []
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
   const dietaryCalories = await redis.get(`dietary_${today}`) || null
@@ -86,8 +87,17 @@ export async function POST(req: Request) {
       })
       .slice(0, 10)
 
-    await redis.set('latest_runs', runs)
-    return NextResponse.json({ ok: true, type: 'runs', count: runs.length })
+    const monthKey = `runs_${today.slice(0, 7)}`
+    const existing: any[] = (await redis.get<any[]>(monthKey)) ?? []
+    const merged = [...existing]
+    for (const run of runs) {
+      if (!merged.find(r => r.date === run.date && r.name === run.name)) {
+        merged.unshift(run)
+      }
+    }
+    merged.sort((a, b) => b.date.localeCompare(a.date))
+    await redis.set(monthKey, merged.slice(0, 100))
+    return NextResponse.json({ ok: true, type: 'runs', count: merged.length })
   }
 
   // ── METRICS ───────────────────────────────────────────────
