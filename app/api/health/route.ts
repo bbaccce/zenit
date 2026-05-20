@@ -12,44 +12,76 @@ function ymd(d: Date) {
   return d.toISOString().split('T')[0]
 }
 
+function scalar(v: any): number | null {
+  if (v == null) return null
+  return typeof v === 'object' ? (v.qty ?? null) : v
+}
+
+function normalizeRun(w: any, fallbackDate: string) {
+  const dateStr = (w.date ?? w.start ?? fallbackDate).replace(' ', 'T').split('T')[0]
+  const distKm = scalar(w.distance_km ?? w.distance)
+  const durRaw = scalar(w.duration_min ?? w.duration)
+  // >600 means value is in seconds (no run lasts 10+ hours in minutes)
+  const durMin = durRaw != null ? (durRaw > 600 ? Math.round(durRaw / 60) : Math.round(durRaw)) : null
+  let pace = w.pace_per_km ?? w.pace ?? null
+  if (!pace && distKm && durRaw) {
+    const sPerKm = durRaw / distKm
+    pace = `${Math.floor(sPerKm / 60)}:${String(Math.round(sPerKm % 60)).padStart(2, '0')}`
+  }
+  const rawHr = w.avg_hr ?? w.avgHeartRate ?? w.heartRateAverage ?? null
+  const avgHr = scalar(rawHr)
+  const rawCal = w.calories_kcal ?? w.activeEnergyBurned ?? w.totalEnergyBurned ?? null
+  let calKcal: number | null = null
+  if (rawCal != null) {
+    const q = scalar(rawCal) ?? 0
+    const units = typeof rawCal === 'object' ? rawCal.units : 'kcal'
+    calKcal = Math.round(units === 'kJ' ? q / 4.184 : q)
+  }
+  return {
+    name: w.name,
+    date: dateStr,
+    duration_min: durMin,
+    distance_km: distKm != null ? Math.round(distKm * 100) / 100 : null,
+    pace_per_km: pace,
+    avg_hr: avgHr != null ? Math.round(avgHr) : null,
+    calories_kcal: calKcal,
+  }
+}
+
 export async function GET() {
   const today = ymd(new Date())
   const monthKey = `runs_${today.slice(0, 7)}`
   const calories = await redis.get(`calories_${today}`) || {}
   let runs = (await redis.get<any[]>(monthKey)) ?? []
-  // one-time migration from legacy latest_runs key
-  if (runs.length === 0) {
+  // migrate or re-normalize if data is missing/corrupted
+  const dirty = runs.length === 0 || runs.some(r => r.duration_min === 0 && (r.distance_km ?? 0) > 0)
+  if (dirty) {
     const legacy = await redis.get<any[]>('latest_runs')
-    if (legacy && legacy.length > 0) {
-      runs = legacy
+    const source = legacy?.length ? legacy : runs
+    if (source.length > 0) {
+      runs = source.map(r => normalizeRun(r, today))
       await redis.set(monthKey, runs)
     }
   }
+
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
   const dietaryCalories = await redis.get(`dietary_${today}`) || null
 
-  // Build 30 days of history
   const days: string[] = []
   for (let i = 0; i < 30; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    days.push(ymd(d))
+    const d = new Date(); d.setDate(d.getDate() - i); days.push(ymd(d))
   }
-
-  const calKeys = days.map(d => `calories_${d}`)
-  const dietKeys = days.map(d => `dietary_${d}`)
-
   const [calVals, dietVals] = await Promise.all([
-    redis.mget<any[]>(...calKeys),
-    redis.mget<any[]>(...dietKeys),
+    redis.mget<any[]>(...days.map(d => `calories_${d}`)),
+    redis.mget<any[]>(...days.map(d => `dietary_${d}`)),
   ])
-
-  const history = days.map((date, i) => {
-    const burned = calVals[i]?.calories_kcal || 0
-    const eaten = dietVals[i]?.calories_kcal || 0
-    return { date, burned, eaten, net: eaten - burned }
-  })
+  const history = days.map((date, i) => ({
+    date,
+    burned: calVals[i]?.calories_kcal || 0,
+    eaten: dietVals[i]?.calories_kcal || 0,
+    net: (dietVals[i]?.calories_kcal || 0) - (calVals[i]?.calories_kcal || 0),
+  }))
 
   return NextResponse.json({ calories, runs, cigs, plan, dietaryCalories, history })
 }
@@ -60,45 +92,14 @@ export async function POST(req: Request) {
 
   // ── WORKOUTS ──────────────────────────────────────────────
   if (body.data?.workouts) {
-    const runs = body.data.workouts
+    const incoming = body.data.workouts
       .filter((w: any) => RUN_TYPES.includes(w.name))
-      .map((w: any) => {
-        const dateStr = (w.date ?? w.start ?? today).replace(' ', 'T').split('T')[0]
-        const rawDist = w.distance_km ?? w.distance
-        const distKm: number | null = typeof rawDist === 'object' ? rawDist.qty : (rawDist ?? null)
-        // duration field is in seconds regardless of its name
-        const durRaw = w.duration_min ?? w.duration ?? null
-        const durMin = durRaw != null ? Math.round(durRaw / 60) : null
-        let paceStr: string | null = null
-        if (distKm && durRaw) {
-          const sPerKm = durRaw / distKm
-          paceStr = `${Math.floor(sPerKm / 60)}:${String(Math.round(sPerKm % 60)).padStart(2, '0')}`
-        }
-        const rawHr = w.avg_hr ?? w.avgHeartRate ?? w.heartRateAverage ?? null
-        const avgHr: number | null = typeof rawHr === 'object' ? rawHr.qty : rawHr
-        const rawCal = w.calories_kcal ?? w.activeEnergyBurned ?? w.totalEnergyBurned ?? null
-        let calKcal: number | null = null
-        if (rawCal != null) {
-          const qty = typeof rawCal === 'object' ? rawCal.qty : rawCal
-          const units = typeof rawCal === 'object' ? rawCal.units : 'kcal'
-          calKcal = Math.round(units === 'kJ' ? qty / 4.184 : qty)
-        }
-        return {
-          name: w.name,
-          date: dateStr,
-          duration_min: durMin,
-          distance_km: distKm != null ? Math.round(distKm * 100) / 100 : null,
-          pace_per_km: paceStr,
-          avg_hr: avgHr != null ? Math.round(avgHr) : null,
-          calories_kcal: calKcal,
-        }
-      })
-      .slice(0, 10)
+      .map((w: any) => normalizeRun(w, today))
 
     const monthKey = `runs_${today.slice(0, 7)}`
     const existing: any[] = (await redis.get<any[]>(monthKey)) ?? []
     const merged = [...existing]
-    for (const run of runs) {
+    for (const run of incoming) {
       if (!merged.find(r => r.date === run.date && r.name === run.name)) {
         merged.unshift(run)
       }
@@ -112,11 +113,9 @@ export async function POST(req: Request) {
   if (body.data?.metrics) {
     const metrics = body.data.metrics
 
-    // Active calories burned
     const active = metrics.find((m: any) =>
       m.name === 'active_energy' || m.name === 'activeEnergyBurned'
     )
-
     if (active) {
       const isKj = active.units === 'kJ'
       const seen = new Map<string, number>()
@@ -134,13 +133,9 @@ export async function POST(req: Request) {
       })
     }
 
-    // Dietary calories eaten
     const dietary = metrics.find((m: any) =>
-      m.name === 'dietary_energy' ||
-      m.name === 'dietaryEnergyConsumed' ||
-      m.name === 'Dietary Energy'
+      m.name === 'dietary_energy' || m.name === 'dietaryEnergyConsumed' || m.name === 'Dietary Energy'
     )
-
     if (dietary) {
       const isKj = dietary.units === 'kJ'
       const seen = new Map<string, number>()
