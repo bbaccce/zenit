@@ -53,15 +53,37 @@ export async function POST(req: Request) {
   if (body.data?.workouts) {
     const runs = body.data.workouts
       .filter((w: any) => RUN_TYPES.includes(w.name))
-      .map((w: any) => ({
-        name: w.name,
-        date: w.start?.split('T')[0] ?? today,
-        duration_min: w.duration,
-        distance_km: w.distance,
-        pace_per_km: w.pace,
-        avg_hr: w.avgHeartRate ?? w.heartRateAverage ?? w.averageHeartRate ?? null,
-        calories_kcal: w.activeEnergyBurned ?? w.totalEnergyBurned ?? w.calories ?? null,
-      }))
+      .map((w: any) => {
+        const dateStr = (w.date ?? w.start ?? today).replace(' ', 'T').split('T')[0]
+        const rawDist = w.distance_km ?? w.distance
+        const distKm: number | null = typeof rawDist === 'object' ? rawDist.qty : (rawDist ?? null)
+        // duration field is in seconds regardless of its name
+        const durRaw = w.duration_min ?? w.duration ?? null
+        const durMin = durRaw != null ? Math.round(durRaw / 60) : null
+        let paceStr: string | null = null
+        if (distKm && durRaw) {
+          const sPerKm = durRaw / distKm
+          paceStr = `${Math.floor(sPerKm / 60)}:${String(Math.round(sPerKm % 60)).padStart(2, '0')}`
+        }
+        const rawHr = w.avg_hr ?? w.avgHeartRate ?? w.heartRateAverage ?? null
+        const avgHr: number | null = typeof rawHr === 'object' ? rawHr.qty : rawHr
+        const rawCal = w.calories_kcal ?? w.activeEnergyBurned ?? w.totalEnergyBurned ?? null
+        let calKcal: number | null = null
+        if (rawCal != null) {
+          const qty = typeof rawCal === 'object' ? rawCal.qty : rawCal
+          const units = typeof rawCal === 'object' ? rawCal.units : 'kcal'
+          calKcal = Math.round(units === 'kJ' ? qty / 4.184 : qty)
+        }
+        return {
+          name: w.name,
+          date: dateStr,
+          duration_min: durMin,
+          distance_km: distKm != null ? Math.round(distKm * 100) / 100 : null,
+          pace_per_km: paceStr,
+          avg_hr: avgHr != null ? Math.round(avgHr) : null,
+          calories_kcal: calKcal,
+        }
+      })
       .slice(0, 10)
 
     await redis.set('latest_runs', runs)

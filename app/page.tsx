@@ -27,18 +27,18 @@ function netColor(net: number | null): string {
 }
 
 const PLAN = [
-  {w:1,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km',done:true},
-  {w:2,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km',done:true},
-  {w:3,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km',done:true},
-  {w:4,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km',done:true},
-  {w:5,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km',done:false},
-  {w:6,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km',done:false},
-  {w:7,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km',done:false},
-  {w:8,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km',done:false},
-  {w:9,sp:'5x800m @ 4:20',ez:'5-7km',te:'4km @ 4:30',lo:'8-12km',done:false},
-  {w:10,sp:'5x800m @ 4:20',ez:'5-7km',te:'4km @ 4:30',lo:'8-12km',done:false},
-  {w:11,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km',done:false},
-  {w:12,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km',done:false},
+  {w:1,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km'},
+  {w:2,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km'},
+  {w:3,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km'},
+  {w:4,sp:'5x400m @ 4:10',ez:'5-7km',te:'3km @ 4:50',lo:'8-10km'},
+  {w:5,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km'},
+  {w:6,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km'},
+  {w:7,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km'},
+  {w:8,sp:'6x600m @ 4:20',ez:'6-8km',te:'4km @ 4:40',lo:'9-11km'},
+  {w:9,sp:'5x800m @ 4:20',ez:'5-7km',te:'4km @ 4:30',lo:'8-12km'},
+  {w:10,sp:'5x800m @ 4:20',ez:'5-7km',te:'4km @ 4:30',lo:'8-12km'},
+  {w:11,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km'},
+  {w:12,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km'},
 ]
 
 const SESS_TYPES = ['speed','easy','tempo','long']
@@ -75,6 +75,8 @@ export default function Home() {
   const [runs, setRuns] = useState<any[]>([])
   const [cigs, setCigs] = useState(0)
   const [checks, setChecks] = useState<Record<string,boolean>>({})
+  const [collapsed, setCollapsed] = useState<Record<number,boolean>>({})
+  const [undoStack, setUndoStack] = useState<{wk:number,type:string}[]>([])
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState('')
 
@@ -144,8 +146,32 @@ export default function Home() {
   }
 
   async function toggleCheck(key: string, checked: boolean) {
-    setChecks(prev => ({...prev, [key]: checked}))
+    const [, wkStr, type] = key.match(/^w(\d+)_(.+)$/) || []
+    const wk = Number(wkStr)
+    setChecks(prev => {
+      const next = {...prev, [key]: checked}
+      if (checked) {
+        const allDone = SESS_TYPES.every(t => next[`w${wk}_${t}`])
+        if (allDone) setCollapsed(c => ({...c, [wk]: true}))
+      }
+      return next
+    })
+    if (checked) {
+      setUndoStack(prev => [...prev, {wk, type}])
+    } else {
+      setUndoStack(prev => prev.filter(u => !(u.wk===wk && u.type===type)))
+    }
     await fetch('/api/plan', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key, checked})})
+  }
+
+  async function undoLastCheck() {
+    if (undoStack.length === 0) return
+    const last = undoStack[undoStack.length - 1]
+    const key = `w${last.wk}_${last.type}`
+    setUndoStack(prev => prev.slice(0, -1))
+    setChecks(prev => ({...prev, [key]: false}))
+    setCollapsed(prev => ({...prev, [last.wk]: false}))
+    await fetch('/api/plan', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key, checked: false})})
   }
 
   const kcal = calories.calories_kcal || 0
@@ -433,15 +459,40 @@ export default function Home() {
               {runs.length===0?(
                 <div style={{color:C.muted,fontSize:12}}>No runs yet — sync Health Auto Export</div>
               ):runs.map((r,i)=>{
-                const intens = r.avg_hr>160?{l:'Race',c:'#f97316'}:r.avg_hr>145?{l:'Tempo',c:'#facc15'}:r.avg_hr>130?{l:'Moderate',c:'#22d3ee'}:{l:'Easy',c:'#4ade80'}
+                function qty(v: any): number|null { return v==null ? null : typeof v==='object' ? v.qty : v }
+                const rawDist = r.distance_km ?? r.distance
+                const distKm: number|null = rawDist!=null ? +(qty(rawDist)!.toFixed(2)) : null
+                const durRaw = r.duration_min ?? r.duration ?? null
+                const durMin: number|null = durRaw!=null ? Math.round(durRaw/60) : null
+                const durSec: number|null = durRaw
+                let paceKm: string|null = r.pace_per_km ?? null
+                if (!paceKm && distKm && durSec) {
+                  const sPerKm = durSec / distKm
+                  paceKm = `${Math.floor(sPerKm/60)}:${String(Math.round(sPerKm%60)).padStart(2,'0')}`
+                }
+                const avgHr: number|null = qty(r.avg_hr)!=null ? Math.round(qty(r.avg_hr)!) : null
+                const rawCal = r.calories_kcal
+                let calKcal: number|null = null
+                if (rawCal!=null) {
+                  const q = qty(rawCal)!
+                  const u = typeof rawCal==='object' ? rawCal.units : 'kcal'
+                  calKcal = Math.round(u==='kJ' ? q/4.184 : q)
+                }
+                const intens = avgHr&&avgHr>160?{l:'Race',c:'#f97316'}:avgHr&&avgHr>145?{l:'Tempo',c:'#facc15'}:avgHr&&avgHr>130?{l:'Moderate',c:'#22d3ee'}:{l:'Easy',c:'#4ade80'}
+                const dateLabel = (r.date??'').split(' ')[0]
                 return(
                   <div key={i} style={{background:C.dim,borderRadius:10,padding:14,marginBottom:8}}>
                     <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
                       <div style={{fontSize:12,fontWeight:700,color:C.run}}>{r.name}</div>
-                      <div style={{fontSize:10,color:C.muted}}>{r.date}</div>
+                      <div style={{fontSize:10,color:C.muted}}>{dateLabel}</div>
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,textAlign:'center'}}>
-                      {[{l:'Dist',v:r.distance_km+'km',c:C.run},{l:'Pace',v:r.pace_per_km,c:C.yellow},{l:'Time',v:r.duration_min+'m',c:C.text},{l:'HR',v:r.avg_hr,c:'#ef4444'}].map(m=>(
+                      {[
+                        {l:'Dist',v:distKm!=null?`${distKm}km`:'—',c:C.run},
+                        {l:'Pace',v:paceKm??'—',c:C.yellow},
+                        {l:'Time',v:durMin!=null?`${durMin}m`:'—',c:C.text},
+                        {l:'HR',v:avgHr!=null?`${avgHr}`:'—',c:'#ef4444'},
+                      ].map(m=>(
                         <div key={m.l}>
                           <div style={{fontSize:9,color:C.muted}}>{m.l}</div>
                           <div style={{fontSize:16,fontWeight:900,color:m.c}}>{m.v}</div>
@@ -450,7 +501,7 @@ export default function Home() {
                     </div>
                     <div style={{marginTop:8,display:'flex',gap:6,alignItems:'center'}}>
                       <span style={{background:intens.c+'20',border:`1px solid ${intens.c}30`,borderRadius:4,padding:'2px 8px',fontSize:10,color:intens.c}}>{intens.l}</span>
-                      {r.calories_kcal>0&&<span style={{fontSize:10,color:C.cal,marginLeft:'auto'}}>🔥 {r.calories_kcal} kcal</span>}
+                      {calKcal!=null&&calKcal>0&&<span style={{fontSize:10,color:C.cal,marginLeft:'auto'}}>🔥 {calKcal} kcal</span>}
                     </div>
                   </div>
                 )
@@ -523,31 +574,45 @@ export default function Home() {
             </div>
 
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20}}>
-              <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📋 12-Week Plan</div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2}}>📋 12-Week Plan</div>
+                {undoStack.length>0&&(
+                  <button onClick={undoLastCheck} style={{
+                    background:C.dim,border:`1px solid ${C.border}`,color:C.yellow,
+                    borderRadius:8,padding:'4px 12px',fontSize:11,fontWeight:700,cursor:'pointer',
+                    WebkitTapHighlightColor:'transparent',touchAction:'manipulation',
+                  }}>↩ Undo</button>
+                )}
+              </div>
               {PLAN.map(p=>{
-                const isCurrent = p.w===5
+                const allDone = SESS_TYPES.every(t => checks[`w${p.w}_${t}`])
+                const isCollapsed = collapsed[p.w] ?? allDone
                 return(
-                  <div key={p.w} style={{padding:'10px 0',borderBottom:`1px solid ${C.dim}`,opacity:p.done&&!isCurrent?0.4:1}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:p.done?0:6}}>
-                      <div style={{fontSize:11,fontWeight:700,color:isCurrent?C.run:p.done?C.green:C.muted,minWidth:30}}>
-                        {p.done?'✅':isCurrent?'▶':'○'} W{p.w}
-                      </div>
-                      {isCurrent&&<span style={{background:C.run+'20',color:C.run,fontSize:9,padding:'1px 6px',borderRadius:4,border:`1px solid ${C.run}30`}}>Current</span>}
-                      {p.done&&<span style={{background:C.green+'20',color:C.green,fontSize:9,padding:'1px 6px',borderRadius:4}}>Done</span>}
-                    </div>
-                    {!p.done&&(
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,paddingLeft:38}}>
+                  <div key={p.w} style={{borderRadius:10,marginBottom:6,border:`1px solid ${C.border}`,overflow:'hidden'}}>
+                    <button onClick={()=>setCollapsed(prev=>({...prev,[p.w]:!prev[p.w]??!allDone}))}
+                      style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'10px 12px',
+                        background:allDone?C.green+'10':C.dim,border:'none',color:C.text,
+                        cursor:'pointer',textAlign:'left',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>
+                      <span style={{fontSize:12,color:allDone?C.green:C.muted}}>{allDone?'●':'○'}</span>
+                      <span style={{fontWeight:700,fontSize:12,color:allDone?C.green:C.text}}>W{p.w}</span>
+                      {allDone&&<span style={{background:C.green+'20',color:C.green,fontSize:9,padding:'1px 6px',borderRadius:4,fontWeight:700}}>Done</span>}
+                      <span style={{marginLeft:'auto',fontSize:10,color:C.muted}}>{isCollapsed?'▾':'▴'}</span>
+                    </button>
+                    {!isCollapsed&&(
+                      <div style={{padding:'8px 12px 12px',background:C.card,display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
                         {SESS_TYPES.map(type=>{
                           const key = `w${p.w}_${type}`
                           const label = type==='speed'?p.sp:type==='easy'?p.ez:type==='tempo'?p.te:p.lo
                           const checked = checks[key]||false
                           return(
-                            <label key={type} style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',padding:'4px 0'}}>
+                            <label key={type} style={{display:'flex',alignItems:'flex-start',gap:8,cursor:'pointer',
+                              background:checked?C.run+'12':C.dim,border:`1px solid ${checked?C.run+'40':C.border}`,
+                              borderRadius:8,padding:'8px 10px'}}>
                               <input type="checkbox" checked={checked} onChange={e=>toggleCheck(key,e.target.checked)}
-                                style={{width:16,height:16,accentColor:C.run,cursor:'pointer'}}/>
+                                style={{width:15,height:15,accentColor:C.run,cursor:'pointer',marginTop:2,flexShrink:0}}/>
                               <div>
-                                <div style={{fontSize:9,color:C.muted,textTransform:'uppercase'}}>{type}</div>
-                                <div style={{fontSize:10,color:C.text}}>{label}</div>
+                                <div style={{fontSize:9,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>{type}</div>
+                                <div style={{fontSize:11,color:checked?C.run:C.text,fontWeight:checked?700:400}}>{label}</div>
                               </div>
                             </label>
                           )
