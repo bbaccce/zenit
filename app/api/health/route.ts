@@ -56,9 +56,11 @@ export async function POST(req: Request) {
       .map((w: any) => ({
         name: w.name,
         date: w.start?.split('T')[0] ?? today,
-        duration: w.duration,
-        distance: w.distance,
-        pace: w.pace,
+        duration_min: w.duration,
+        distance_km: w.distance,
+        pace_per_km: w.pace,
+        avg_hr: w.avgHeartRate ?? w.heartRateAverage ?? w.averageHeartRate ?? null,
+        calories_kcal: w.activeEnergyBurned ?? w.totalEnergyBurned ?? w.calories ?? null,
       }))
       .slice(0, 10)
 
