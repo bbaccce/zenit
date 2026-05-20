@@ -16,7 +16,15 @@ export async function GET() {
   const today = ymd(new Date())
   const monthKey = `runs_${today.slice(0, 7)}`
   const calories = await redis.get(`calories_${today}`) || {}
-  const runs = (await redis.get<any[]>(monthKey)) ?? []
+  let runs = (await redis.get<any[]>(monthKey)) ?? []
+  // one-time migration from legacy latest_runs key
+  if (runs.length === 0) {
+    const legacy = await redis.get<any[]>('latest_runs')
+    if (legacy && legacy.length > 0) {
+      runs = legacy
+      await redis.set(monthKey, runs)
+    }
+  }
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
   const dietaryCalories = await redis.get(`dietary_${today}`) || null
