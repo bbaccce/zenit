@@ -78,6 +78,7 @@ export default function Home() {
   const [checks, setChecks] = useState<Record<string,boolean>>({})
   const [collapsed, setCollapsed] = useState<Record<number,boolean>>({})
   const [undoStack, setUndoStack] = useState<{wk:number,type:string}[]>([])
+  const [cigHistory, setCigHistory] = useState<{date:string,count:number}[]>([])
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState('')
 
@@ -106,6 +107,7 @@ export default function Home() {
       if (health.runs?.length) setRuns(health.runs)
       if (health.latestRuns?.length) setLatestRuns(health.latestRuns)
       setCigs(cigRes.count || 0)
+      if (cigRes.history?.length) setCigHistory(cigRes.history)
       setChecks(planRes.checks || {})
       if (settingsRes) {
         setSettings(settingsRes)
@@ -644,6 +646,55 @@ export default function Home() {
               <div style={{marginTop:16,fontSize:13,color:cigs===0?C.green:cigs>=cigGoal?'#ef4444':C.muted}}>
                 {cigs===0?'🌟 Zero today!':cigs>=cigGoal?'🚨 Limit reached!':`${cigGoal-cigs} remaining`}
               </div>
+
+              {cigHistory.length>0&&(()=>{
+                const todayStr = ymd(new Date())
+                const maxVal = Math.max(cigGoal, ...cigHistory.map(d=>d.count), 1)
+                const barH = 56
+                function cigColor(n:number, isToday:boolean) {
+                  if (isToday) return C.smoke
+                  if (n===0) return C.green
+                  if (n<=3) return YELLOW
+                  if (n<=7) return AMBER
+                  return RED
+                }
+                return(
+                  <div style={{marginTop:20,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+                    <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:10}}>14-DAY HISTORY</div>
+                    <div style={{display:'flex',alignItems:'flex-end',gap:3,height:barH}}>
+                      {cigHistory.map(day=>{
+                        const isToday = day.date===todayStr
+                        const h = day.count===0 ? 3 : Math.round((day.count/maxVal)*barH)
+                        const color = cigColor(day.count,isToday)
+                        return(
+                          <div key={day.date} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}}>
+                            <div style={{
+                              width:'100%',height:h,
+                              background:color,
+                              borderRadius:'3px 3px 0 0',
+                              boxShadow:isToday?`0 0 6px ${C.smoke}80`:undefined,
+                              outline:isToday?`1px solid ${C.smoke}`:'none',
+                              opacity:0.9,
+                            }}/>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div style={{display:'flex',gap:3,marginTop:4}}>
+                      {cigHistory.map(day=>{
+                        const isToday = day.date===todayStr
+                        const label = isToday ? 'T' : String(new Date(day.date+'T12:00:00').getDate())
+                        return(
+                          <div key={day.date} style={{flex:1,textAlign:'center',fontSize:8,
+                            color:isToday?C.smoke:C.muted,fontWeight:isToday?700:400}}>
+                            {label}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             <div style={{background:C.card,border:`1px solid ${C.green}20`,borderRadius:14,padding:20}}>
               <div style={{fontSize:10,color:C.green,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>💚 Craving Tips</div>
