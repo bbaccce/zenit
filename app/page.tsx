@@ -589,7 +589,7 @@ export default function Home() {
                 const isCollapsed = collapsed[p.w] ?? allDone
                 return(
                   <div key={p.w} style={{borderRadius:10,marginBottom:6,border:`1px solid ${C.border}`,overflow:'hidden'}}>
-                    <button onClick={()=>setCollapsed(prev=>({...prev,[p.w]:!prev[p.w]??!allDone}))}
+                    <button onClick={()=>setCollapsed(prev=>({...prev,[p.w]:!(prev[p.w]??allDone)}))}
                       style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'10px 12px',
                         background:allDone?C.green+'10':C.dim,border:'none',color:C.text,
                         cursor:'pointer',textAlign:'left',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>
