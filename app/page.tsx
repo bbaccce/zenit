@@ -463,8 +463,8 @@ export default function Home() {
                 const rawDist = r.distance_km ?? r.distance
                 const distKm: number|null = rawDist!=null ? +(qty(rawDist)!.toFixed(2)) : null
                 const durRaw = r.duration_min ?? r.duration ?? null
-                const durMin: number|null = durRaw!=null ? Math.round(durRaw/60) : null
-                const durSec: number|null = durRaw
+                const durMin: number|null = durRaw!=null ? (durRaw>600 ? Math.round(durRaw/60) : Math.round(durRaw)) : null
+                const durSec: number|null = durRaw!=null ? (durRaw>600 ? durRaw : durRaw*60) : null
                 let paceKm: string|null = r.pace_per_km ?? null
                 if (!paceKm && distKm && durSec) {
                   const sPerKm = durSec / distKm
