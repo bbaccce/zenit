@@ -52,17 +52,15 @@ export async function GET() {
   const today = ymd(new Date())
   const monthKey = `runs_${today.slice(0, 7)}`
   const calories = await redis.get(`calories_${today}`) || {}
-  let runs = (await redis.get<any[]>(monthKey)) ?? []
-  // migrate or re-normalize if data is missing/corrupted
-  const dirty = runs.length === 0 || runs.some(r => r.duration_min === 0 && (r.distance_km ?? 0) > 0)
-  if (dirty) {
-    const legacy = await redis.get<any[]>('latest_runs')
-    const source = legacy?.length ? legacy : runs
-    if (source.length > 0) {
-      runs = source.map(r => normalizeRun(r, today))
-      await redis.set(monthKey, runs)
-    }
-  }
+  const [rawMonthRuns, rawLatestRuns] = await Promise.all([
+    redis.get<any[]>(monthKey),
+    redis.get<any[]>('latest_runs'),
+  ])
+  const monthRuns = (rawMonthRuns ?? []).map(r => normalizeRun(r, today))
+  const latestRuns = (rawLatestRuns ?? []).map(r => normalizeRun(r, today))
+  // persist re-normalized month runs if they changed
+  if (monthRuns.length > 0) await redis.set(monthKey, monthRuns)
+  const runs = monthRuns
 
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
@@ -83,7 +81,7 @@ export async function GET() {
     net: (dietVals[i]?.calories_kcal || 0) - (calVals[i]?.calories_kcal || 0),
   }))
 
-  return NextResponse.json({ calories, runs, cigs, plan, dietaryCalories, history })
+  return NextResponse.json({ calories, runs, latestRuns, cigs, plan, dietaryCalories, history })
 }
 
 export async function POST(req: Request) {

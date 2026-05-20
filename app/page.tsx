@@ -73,6 +73,7 @@ export default function Home() {
   const [dietaryCalories, setDietaryCalories] = useState<any>(null)
   const [history, setHistory] = useState<any[]>([])
   const [runs, setRuns] = useState<any[]>([])
+  const [latestRuns, setLatestRuns] = useState<any[]>([])
   const [cigs, setCigs] = useState(0)
   const [checks, setChecks] = useState<Record<string,boolean>>({})
   const [collapsed, setCollapsed] = useState<Record<number,boolean>>({})
@@ -103,6 +104,7 @@ export default function Home() {
       if (health.dietaryCalories?.calories_kcal) setDietaryCalories(health.dietaryCalories)
       if (health.history) setHistory(health.history)
       if (health.runs?.length) setRuns(health.runs)
+      if (health.latestRuns?.length) setLatestRuns(health.latestRuns)
       setCigs(cigRes.count || 0)
       setChecks(planRes.checks || {})
       if (settingsRes) {
@@ -456,9 +458,9 @@ export default function Home() {
 
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📡 Recent Runs — Apple Watch</div>
-              {runs.length===0?(
+              {latestRuns.length===0?(
                 <div style={{color:C.muted,fontSize:12}}>No runs yet — sync Health Auto Export</div>
-              ):runs.map((r,i)=>{
+              ):latestRuns.map((r,i)=>{
                 function qty(v: any): number|null { return v==null ? null : typeof v==='object' ? v.qty : v }
                 const rawDist = r.distance_km ?? r.distance
                 const distKm: number|null = rawDist!=null ? +(qty(rawDist)!.toFixed(2)) : null
