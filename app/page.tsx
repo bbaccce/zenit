@@ -646,15 +646,46 @@ export default function Home() {
         {/* OTHER SPORTS */}
         {tab===2 && (
           <div>
+            {/* Monthly active time goal — mirrors 5K Goal Tracker */}
             <div style={{background:C.card,border:`1px solid ${C.pink}30`,borderRadius:14,padding:20,marginBottom:12}}>
-              <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📡 Recent Activities</div>
+              <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>⏱ Monthly Active Time</div>
+              {(()=>{
+                const goalMin = 600
+                const totalMin = sports.reduce((s,r)=>s+(r.duration_min??0),0)
+                const remaining = Math.max(0, goalMin - totalMin)
+                const pct = Math.min(Math.round((totalMin/goalMin)*100), 100)
+                const fmt = (m:number) => `${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}m`
+                return(<>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+                    <div><div style={{fontSize:9,color:C.muted}}>This Month</div><div style={{fontSize:28,fontWeight:900,color:C.pink}}>{fmt(totalMin)}</div></div>
+                    <div style={{textAlign:'center'}}><div style={{fontSize:9,color:C.muted}}>To Go</div><div style={{fontSize:28,fontWeight:900,color:C.yellow}}>−{fmt(remaining)}</div></div>
+                    <div style={{textAlign:'right'}}><div style={{fontSize:9,color:C.muted}}>Goal</div><div style={{fontSize:28,fontWeight:900,color:C.green}}>{fmt(goalMin)}</div></div>
+                  </div>
+                  <div style={{height:8,background:C.border,borderRadius:4,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${pct}%`,background:`linear-gradient(90deg,${C.pink},${C.green})`,borderRadius:4}}/>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:C.muted,marginTop:4}}>
+                    <span>0h</span><span>You ({pct}%)</span><span>10h 🏅</span>
+                  </div>
+                </>)
+              })()}
+            </div>
+
+            {/* Recent Activities — mirrors Recent Runs */}
+            <div style={{background:C.card,border:`1px solid ${C.pink}30`,borderRadius:14,padding:20,marginBottom:12}}>
+              <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📡 Recent Activities — Apple Watch</div>
               {latestSports.length===0?(
                 <div style={{color:C.muted,fontSize:12}}>No recent activities — sync Health Auto Export</div>
               ):latestSports.map((r,i)=>{
-                const distKm = r.distance_km
-                const durMin = r.duration_min
-                const avgHr = r.avg_hr
-                const calKcal = r.calories_kcal
+                function qty(v:any):number|null{return v==null?null:typeof v==='object'?v.qty:v}
+                const rawDist = r.distance_km ?? r.distance
+                const distKm:number|null = rawDist!=null ? +(qty(rawDist)!.toFixed(2)) : null
+                const durRaw = r.duration_min ?? r.duration ?? null
+                const durMin:number|null = durRaw!=null ? (durRaw>600?Math.round(durRaw/60):Math.round(durRaw)) : null
+                const avgHr:number|null = qty(r.avg_hr)!=null ? Math.round(qty(r.avg_hr)!) : null
+                const rawCal = r.calories_kcal
+                let calKcal:number|null = null
+                if(rawCal!=null){const q=qty(rawCal)!;const u=typeof rawCal==='object'?rawCal.units:'kcal';calKcal=Math.round(u==='kJ'?q/4.184:q)}
                 const intens = avgHr&&avgHr>160?{l:'Race',c:'#f97316'}:avgHr&&avgHr>145?{l:'Tempo',c:'#facc15'}:avgHr&&avgHr>130?{l:'Moderate',c:'#22d3ee'}:{l:'Easy',c:'#4ade80'}
                 const dateLabel = (r.date??'').split(' ')[0]
                 const emoji = sportEmoji(r.name??'')
@@ -666,10 +697,10 @@ export default function Home() {
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,textAlign:'center'}}>
                       {[
+                        {l:'Dist',v:distKm!=null?`${distKm}km`:'—',c:C.pink},
                         {l:'Time',v:durMin!=null?`${durMin}m`:'—',c:C.text},
                         {l:'HR',v:avgHr!=null?`${avgHr}`:'—',c:'#ef4444'},
                         {l:'Cal',v:calKcal!=null?`${calKcal}`:'—',c:C.cal},
-                        {l:'Dist',v:distKm!=null?`${distKm}km`:'—',c:C.pink},
                       ].map(m=>(
                         <div key={m.l}>
                           <div style={{fontSize:9,color:C.muted}}>{m.l}</div>
@@ -677,52 +708,78 @@ export default function Home() {
                         </div>
                       ))}
                     </div>
-                    {avgHr!=null&&(
-                      <div style={{marginTop:8,display:'flex',gap:6,alignItems:'center'}}>
-                        <span style={{background:intens.c+'20',border:`1px solid ${intens.c}30`,borderRadius:4,padding:'2px 8px',fontSize:10,color:intens.c}}>{intens.l}</span>
-                        {calKcal!=null&&calKcal>0&&<span style={{fontSize:10,color:C.cal,marginLeft:'auto'}}>🔥 {calKcal} kcal</span>}
-                      </div>
-                    )}
+                    <div style={{marginTop:8,display:'flex',gap:6,alignItems:'center'}}>
+                      <span style={{background:intens.c+'20',border:`1px solid ${intens.c}30`,borderRadius:4,padding:'2px 8px',fontSize:10,color:intens.c}}>{intens.l}</span>
+                      {calKcal!=null&&calKcal>0&&<span style={{fontSize:10,color:C.cal,marginLeft:'auto'}}>🔥 {calKcal} kcal</span>}
+                    </div>
                   </div>
                 )
               })}
             </div>
 
+            {/* Monthly Activity Log — mirrors Monthly km Log */}
             <div style={{background:C.card,border:`1px solid ${C.pink}30`,borderRadius:14,padding:20}}>
               {(()=>{
-                const monthLabel = new Date().toLocaleString('default',{month:'long',year:'numeric'})
+                const goalMin = 600
                 const totalMin = sports.reduce((s,r)=>s+(r.duration_min??0),0)
-                const totalCal = sports.reduce((s,r)=>s+(r.calories_kcal??0),0)
+                const monthPct = Math.min((totalMin/goalMin)*100, 100)
+                const rv = 52, circ = 2*Math.PI*rv
+                const monthLabel = new Date().toLocaleString('default',{month:'long',year:'numeric'})
+                const hrs = Math.floor(totalMin/60), mins = totalMin%60
+                const remMin = Math.max(0, goalMin-totalMin)
                 const typeCounts: Record<string,number> = {}
                 sports.forEach(r=>{const t=r.name||'Other';typeCounts[t]=(typeCounts[t]||0)+1})
-                const hrs = Math.floor(totalMin/60)
-                const mins = totalMin%60
+                const olderSports = sports.filter(r=>!latestSports.some(ls=>ls.date===r.date&&ls.name===r.name))
                 return(<>
-                  <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:16}}>📅 {monthLabel}</div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
-                    {[
-                      {l:'Activities',v:String(sports.length),c:C.pink},
-                      {l:'Active Time',v:totalMin>0?(hrs>0?`${hrs}h ${mins}m`:`${mins}m`):'—',c:C.yellow},
-                      {l:'Calories',v:totalCal>0?String(Math.round(totalCal)):'—',c:C.cal},
-                    ].map(m=>(
-                      <div key={m.l} style={{textAlign:'center',padding:'10px 4px',background:C.dim,borderRadius:10}}>
-                        <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:4}}>{m.l}</div>
-                        <div style={{fontSize:18,fontWeight:900,color:m.c}}>{m.v}</div>
+                  <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:16}}>📅 {monthLabel} — Activity Log</div>
+                  <div style={{display:'flex',alignItems:'center',gap:20,marginBottom:16}}>
+                    <div style={{position:'relative',width:120,height:120,flexShrink:0}}>
+                      <svg width="120" height="120" style={{transform:'rotate(-90deg)'}}>
+                        <circle cx="60" cy="60" r={rv} fill="none" stroke={C.border} strokeWidth="10"/>
+                        <circle cx="60" cy="60" r={rv} fill="none" stroke={C.pink} strokeWidth="10"
+                          strokeDasharray={`${circ*(monthPct/100)} ${circ}`} strokeLinecap="round"
+                          style={{transition:'stroke-dasharray 1s ease'}}/>
+                      </svg>
+                      <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
+                        <div style={{fontSize:18,fontWeight:900,color:C.pink}}>{hrs>0?`${hrs}h`:totalMin>0?`${mins}m`:'0'}</div>
+                        <div style={{fontSize:9,color:C.muted}}>{hrs>0?`${mins}m`:'active'}</div>
                       </div>
-                    ))}
-                  </div>
-                  {Object.keys(typeCounts).length>0?(
+                    </div>
                     <div>
-                      <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:8}}>BY TYPE</div>
-                      {Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([name,count])=>(
-                        <div key={name} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-                          padding:'6px 0',borderTop:`1px solid ${C.border}`}}>
-                          <div style={{fontSize:12,color:C.text}}>{sportEmoji(name)} {name}</div>
-                          <div style={{fontSize:12,fontWeight:700,color:C.pink}}>{count}×</div>
+                      <div style={{fontSize:28,fontWeight:900,color:C.pink}}>{Math.round(monthPct)}%</div>
+                      <div style={{fontSize:11,color:C.muted}}>of 10h goal</div>
+                      <div style={{fontSize:11,color:C.green,marginTop:4}}>{Math.floor(remMin/60)}h {String(remMin%60).padStart(2,'0')}m to go</div>
+                      <div style={{fontSize:10,color:C.muted,marginTop:4}}>{sports.length} workout{sports.length!==1?'s':''} logged</div>
+                    </div>
+                  </div>
+                  {olderSports.length>0&&(
+                    <div>
+                      {olderSports.map((r,i)=>(
+                        <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                          padding:'8px 0',borderTop:`1px solid ${C.border}`}}>
+                          <div style={{fontSize:11,color:C.muted}}>{(r.date??'').split(' ')[0]}</div>
+                          <div style={{fontSize:13,fontWeight:700,color:C.pink}}>{sportEmoji(r.name??'')} {r.name}</div>
+                          <div style={{fontSize:11,color:C.yellow}}>{r.duration_min!=null?`${r.duration_min}m`:'—'}</div>
+                          {r.calories_kcal!=null&&<div style={{fontSize:11,color:C.cal}}>🔥 {r.calories_kcal}</div>}
                         </div>
                       ))}
                     </div>
-                  ):(
+                  )}
+                  {Object.keys(typeCounts).length>0&&(
+                    <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.dim}`}}>
+                      <div style={{fontSize:8,color:C.muted,letterSpacing:1,marginBottom:6}}>BY TYPE</div>
+                      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                        {Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([name,count])=>(
+                          <div key={name} style={{display:'flex',alignItems:'center',gap:4,background:C.dim,borderRadius:6,padding:'3px 8px'}}>
+                            <span style={{fontSize:12}}>{sportEmoji(name)}</span>
+                            <span style={{fontSize:10,color:C.muted}}>{name}</span>
+                            <span style={{fontSize:10,fontWeight:700,color:C.pink}}>{count}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {sports.length===0&&(
                     <div style={{color:C.muted,fontSize:12}}>No activities this month — sync Health Auto Export</div>
                   )}
                 </>)
