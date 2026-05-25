@@ -67,6 +67,27 @@ function ymd(d: Date): string {
   return `${y}-${m}-${dd}`
 }
 
+function sportEmoji(name: string): string {
+  const n = (name || '').toLowerCase()
+  if (n.includes('cycl') || n.includes('bike') || n.includes('bik')) return '🚴'
+  if (n.includes('swim')) return '🏊'
+  if (n.includes('hik')) return '🥾'
+  if (n.includes('strength') || n.includes('weight') || n.includes('gym')) return '💪'
+  if (n.includes('tennis')) return '🎾'
+  if (n.includes('soccer') || n.includes('football')) return '⚽'
+  if (n.includes('basketball')) return '🏀'
+  if (n.includes('yoga')) return '🧘'
+  if (n.includes('dance')) return '💃'
+  if (n.includes('hiit') || n.includes('circuit')) return '⚡'
+  if (n.includes('walk')) return '🚶'
+  if (n.includes('ski') || n.includes('snow')) return '⛷️'
+  if (n.includes('climb') || n.includes('boulder')) return '🧗'
+  if (n.includes('row')) return '🚣'
+  if (n.includes('box')) return '🥊'
+  if (n.includes('pilates')) return '🤸'
+  return '🏅'
+}
+
 export default function Home() {
   const [tab, setTab] = useState(0)
   const [calories, setCalories] = useState<any>({})
@@ -74,6 +95,8 @@ export default function Home() {
   const [history, setHistory] = useState<any[]>([])
   const [runs, setRuns] = useState<any[]>([])
   const [latestRuns, setLatestRuns] = useState<any[]>([])
+  const [sports, setSports] = useState<any[]>([])
+  const [latestSports, setLatestSports] = useState<any[]>([])
   const [cigs, setCigs] = useState(0)
   const [checks, setChecks] = useState<Record<string,boolean>>({})
   const [collapsed, setCollapsed] = useState<Record<number,boolean>>({})
@@ -106,6 +129,8 @@ export default function Home() {
       if (health.history) setHistory(health.history)
       if (health.runs?.length) setRuns(health.runs)
       if (health.latestRuns?.length) setLatestRuns(health.latestRuns)
+      if (health.sports?.length) setSports(health.sports)
+      if (health.latestSports?.length) setLatestSports(health.latestSports)
       setCigs(cigRes.count || 0)
       if (cigRes.history?.length) setCigHistory(cigRes.history)
       setChecks(planRes.checks || {})
@@ -185,8 +210,8 @@ export default function Home() {
   const calPct = Math.min(Math.round((kcal/calGoal)*100), 100)
   const eatPct = Math.min(Math.round((eaten/eatGoal)*100), 100)
   const cigPct = Math.min(Math.round((cigs/cigGoal)*100), 100)
-  const TABS = ['🔥','🏃','🚭','🤖']
-  const TABNAMES = ['Calories','Running','Smoke','Coach']
+  const TABS = ['🔥','🏃','🏅','🚭','🤖']
+  const TABNAMES = ['Calories','Running','Sports','Smoke','Coach']
 
   const ringSize = 220
   const cx = ringSize / 2
@@ -546,7 +571,7 @@ export default function Home() {
                   </div>
                   {runs.length>0&&(
                     <div>
-                      {runs.map((r,i)=>{
+                      {runs.filter(r=>!latestRuns.some(lr=>lr.date===r.date&&lr.name===r.name)).map((r,i)=>{
                         const d = typeof r.distance_km==='object'&&r.distance_km!=null ? +(r.distance_km.qty.toFixed(2)) : r.distance_km
                         return(
                           <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
@@ -618,8 +643,96 @@ export default function Home() {
           </div>
         )}
 
-        {/* SMOKE */}
+        {/* OTHER SPORTS */}
         {tab===2 && (
+          <div>
+            <div style={{background:C.card,border:`1px solid ${C.pink}30`,borderRadius:14,padding:20,marginBottom:12}}>
+              <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>📡 Recent Activities</div>
+              {latestSports.length===0?(
+                <div style={{color:C.muted,fontSize:12}}>No recent activities — sync Health Auto Export</div>
+              ):latestSports.map((r,i)=>{
+                const distKm = r.distance_km
+                const durMin = r.duration_min
+                const avgHr = r.avg_hr
+                const calKcal = r.calories_kcal
+                const intens = avgHr&&avgHr>160?{l:'Race',c:'#f97316'}:avgHr&&avgHr>145?{l:'Tempo',c:'#facc15'}:avgHr&&avgHr>130?{l:'Moderate',c:'#22d3ee'}:{l:'Easy',c:'#4ade80'}
+                const dateLabel = (r.date??'').split(' ')[0]
+                const emoji = sportEmoji(r.name??'')
+                return(
+                  <div key={i} style={{background:C.dim,borderRadius:10,padding:14,marginBottom:8}}>
+                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.pink}}>{emoji} {r.name}</div>
+                      <div style={{fontSize:10,color:C.muted}}>{dateLabel}</div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,textAlign:'center'}}>
+                      {[
+                        {l:'Time',v:durMin!=null?`${durMin}m`:'—',c:C.text},
+                        {l:'HR',v:avgHr!=null?`${avgHr}`:'—',c:'#ef4444'},
+                        {l:'Cal',v:calKcal!=null?`${calKcal}`:'—',c:C.cal},
+                        {l:'Dist',v:distKm!=null?`${distKm}km`:'—',c:C.pink},
+                      ].map(m=>(
+                        <div key={m.l}>
+                          <div style={{fontSize:9,color:C.muted}}>{m.l}</div>
+                          <div style={{fontSize:16,fontWeight:900,color:m.c}}>{m.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {avgHr!=null&&(
+                      <div style={{marginTop:8,display:'flex',gap:6,alignItems:'center'}}>
+                        <span style={{background:intens.c+'20',border:`1px solid ${intens.c}30`,borderRadius:4,padding:'2px 8px',fontSize:10,color:intens.c}}>{intens.l}</span>
+                        {calKcal!=null&&calKcal>0&&<span style={{fontSize:10,color:C.cal,marginLeft:'auto'}}>🔥 {calKcal} kcal</span>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{background:C.card,border:`1px solid ${C.pink}30`,borderRadius:14,padding:20}}>
+              {(()=>{
+                const monthLabel = new Date().toLocaleString('default',{month:'long',year:'numeric'})
+                const totalMin = sports.reduce((s,r)=>s+(r.duration_min??0),0)
+                const totalCal = sports.reduce((s,r)=>s+(r.calories_kcal??0),0)
+                const typeCounts: Record<string,number> = {}
+                sports.forEach(r=>{const t=r.name||'Other';typeCounts[t]=(typeCounts[t]||0)+1})
+                const hrs = Math.floor(totalMin/60)
+                const mins = totalMin%60
+                return(<>
+                  <div style={{fontSize:10,color:C.pink,textTransform:'uppercase',letterSpacing:2,marginBottom:16}}>📅 {monthLabel}</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
+                    {[
+                      {l:'Activities',v:String(sports.length),c:C.pink},
+                      {l:'Active Time',v:totalMin>0?(hrs>0?`${hrs}h ${mins}m`:`${mins}m`):'—',c:C.yellow},
+                      {l:'Calories',v:totalCal>0?String(Math.round(totalCal)):'—',c:C.cal},
+                    ].map(m=>(
+                      <div key={m.l} style={{textAlign:'center',padding:'10px 4px',background:C.dim,borderRadius:10}}>
+                        <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:4}}>{m.l}</div>
+                        <div style={{fontSize:18,fontWeight:900,color:m.c}}>{m.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {Object.keys(typeCounts).length>0?(
+                    <div>
+                      <div style={{fontSize:9,color:C.muted,letterSpacing:1,marginBottom:8}}>BY TYPE</div>
+                      {Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([name,count])=>(
+                        <div key={name} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                          padding:'6px 0',borderTop:`1px solid ${C.border}`}}>
+                          <div style={{fontSize:12,color:C.text}}>{sportEmoji(name)} {name}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:C.pink}}>{count}×</div>
+                        </div>
+                      ))}
+                    </div>
+                  ):(
+                    <div style={{color:C.muted,fontSize:12}}>No activities this month — sync Health Auto Export</div>
+                  )}
+                </>)
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* SMOKE */}
+        {tab===3 && (
           <div>
             <div style={{background:C.card,border:`1px solid ${C.smoke}30`,borderRadius:14,padding:20,marginBottom:12,textAlign:'center'}}>
               <div style={{fontSize:10,color:C.smoke,textTransform:'uppercase',letterSpacing:2,marginBottom:20}}>🚭 Cigarettes Today</div>
@@ -706,7 +819,7 @@ export default function Home() {
         )}
 
         {/* COACH */}
-        {tab===3 && (
+        {tab===4 && (
           <div style={{background:C.card,border:`1px solid ${C.mental}30`,borderRadius:14,padding:20}}>
             <div style={{fontSize:10,color:C.mental,textTransform:'uppercase',letterSpacing:2,marginBottom:8}}>🤖 AI Coach</div>
             <div style={{fontSize:11,color:C.muted,marginBottom:16}}>Coming soon — full AI coach with your live stats</div>
@@ -737,11 +850,11 @@ export default function Home() {
         {TABS.map((t,i)=>(
           <button key={i} onClick={()=>setTab(i)} style={{
             flex:1,padding:'12px 0',background:'transparent',border:'none',
-            color:tab===i?[C.cal,C.run,C.smoke,C.mental][i]:C.muted,
+            color:tab===i?[C.cal,C.run,C.pink,C.smoke,C.mental][i]:C.muted,
             fontSize:22,cursor:'pointer',
             WebkitTapHighlightColor:'transparent',
             touchAction:'manipulation',
-            borderTop:`2px solid ${tab===i?[C.cal,C.run,C.smoke,C.mental][i]:'transparent'}`,
+            borderTop:`2px solid ${tab===i?[C.cal,C.run,C.pink,C.smoke,C.mental][i]:'transparent'}`,
             transition:'all 0.15s',
           }}>
             <div>{t}</div>

@@ -228,10 +228,16 @@ export default function Page() {
                   {['M','T','W','T','F','S','S'].map((d,i) => (
                     <div key={i} style={{ textAlign: 'center', fontSize: 9, color: C.muted, paddingBottom: 4 }}>{d}</div>
                   ))}
-                  {[...history].reverse().map((h, i) => (
-                    <div key={i} title={`${h.date}: ${h.burned} burned, ${h.eaten} eaten`}
-                      style={{ height: 28, borderRadius: 4, background: h.burned > 0 || h.eaten > 0 ? netColor(h.net) : C.dim, opacity: h.burned > 0 || h.eaten > 0 ? 1 : 0.3 }} />
-                  ))}
+                  {(() => {
+                    const todayStr = ymd(new Date())
+                    return [...history].reverse().map((h, i) => {
+                      const isToday = h.date === todayStr
+                      return (
+                        <div key={i} title={`${h.date}: ${h.burned} burned, ${h.eaten} eaten`}
+                          style={{ height: 28, borderRadius: 4, background: h.burned > 0 || h.eaten > 0 ? netColor(h.net) : C.dim, opacity: h.burned > 0 || h.eaten > 0 ? 1 : 0.3, outline: isToday ? `2px solid ${C.text}` : 'none', outlineOffset: 2 }} />
+                      )
+                    })
+                  })()}
                 </div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 9, color: C.muted }}>
                   {[[BRIGHT_BLUE,'1000+ deficit'],[DEEP_GREEN,'500-1000'],[C.yellow,'200-500'],[AMBER,'0-200'],[RED,'surplus']].map(([c,l]) => (

@@ -48,19 +48,64 @@ function normalizeRun(w: any, fallbackDate: string) {
   }
 }
 
+async function mergeWorkouts(items: any[], prefix: string): Promise<number> {
+  const byMonth = new Map<string, any[]>()
+  for (const item of items) {
+    const mk = `${prefix}_${item.date.slice(0, 7)}`
+    if (!byMonth.has(mk)) byMonth.set(mk, [])
+    byMonth.get(mk)!.push(item)
+  }
+  let total = 0
+  await Promise.all(Array.from(byMonth.entries()).map(async ([mk, monthItems]) => {
+    const existing: any[] = (await redis.get<any[]>(mk)) ?? []
+    const merged = [...existing]
+    for (const item of monthItems) {
+      const idx = merged.findIndex(r => r.date === item.date && r.name === item.name)
+      if (idx >= 0) merged[idx] = item
+      else merged.unshift(item)
+    }
+    merged.sort((a, b) => b.date.localeCompare(a.date))
+    await redis.set(mk, merged.slice(0, 100))
+    total += merged.length
+  }))
+  return total
+}
+
 export async function GET() {
   const today = ymd(new Date())
-  const monthKey = `runs_${today.slice(0, 7)}`
+  const makeMonthKeys = (prefix: string) => [0, 1, 2].map(n => {
+    const d = new Date(); d.setMonth(d.getMonth() - n)
+    return `${prefix}_${ymd(d).slice(0, 7)}`
+  })
+  const runMonthKeys = makeMonthKeys('runs')
+  const sportMonthKeys = makeMonthKeys('sports')
+
   const calories = await redis.get(`calories_${today}`) || {}
-  const [rawMonthRuns, rawLatestRuns] = await Promise.all([
-    redis.get<any[]>(monthKey),
-    redis.get<any[]>('latest_runs'),
+  const [rawAllMonths, rawSportMonths] = await Promise.all([
+    Promise.all(runMonthKeys.map(k => redis.get<any[]>(k))),
+    Promise.all(sportMonthKeys.map(k => redis.get<any[]>(k))),
   ])
-  const monthRuns = (rawMonthRuns ?? []).map(r => normalizeRun(r, today))
-  const latestRuns = (rawLatestRuns ?? []).map(r => normalizeRun(r, today))
-  // persist re-normalized month runs if they changed
-  if (monthRuns.length > 0) await redis.set(monthKey, monthRuns)
+
+  const monthRuns = (rawAllMonths[0] ?? []).map(r => normalizeRun(r, today))
+  const cutoff = ymd(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))
+  const seen = new Set<string>()
+  const latestRuns = rawAllMonths
+    .flatMap(r => r ?? [])
+    .map(r => normalizeRun(r, today))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter(r => { const k = `${r.date}_${r.name}`; if (seen.has(k)) return false; seen.add(k); return true })
+    .filter(r => r.date >= cutoff)
   const runs = monthRuns
+
+  const monthlySports = (rawSportMonths[0] ?? []).map(r => normalizeRun(r, today))
+  const sportCutoff = ymd(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+  const sportSeen = new Set<string>()
+  const latestSports = rawSportMonths
+    .flatMap(r => r ?? [])
+    .map(r => normalizeRun(r, today))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter(r => { const k = `${r.date}_${r.name}`; if (sportSeen.has(k)) return false; sportSeen.add(k); return true })
+    .filter(r => r.date >= sportCutoff)
 
   const cigs = await redis.get(`cigs_${today}`) || 0
   const plan = await redis.get('plan_checks') || {}
@@ -81,7 +126,7 @@ export async function GET() {
     net: (dietVals[i]?.calories_kcal || 0) - (calVals[i]?.calories_kcal || 0),
   }))
 
-  return NextResponse.json({ calories, runs, latestRuns, cigs, plan, dietaryCalories, history })
+  return NextResponse.json({ calories, runs, latestRuns, sports: monthlySports, latestSports, cigs, plan, dietaryCalories, history })
 }
 
 export async function POST(req: Request) {
@@ -90,21 +135,18 @@ export async function POST(req: Request) {
 
   // ── WORKOUTS ──────────────────────────────────────────────
   if (body.data?.workouts) {
-    const incoming = body.data.workouts
+    const incomingRuns = body.data.workouts
       .filter((w: any) => RUN_TYPES.includes(w.name))
       .map((w: any) => normalizeRun(w, today))
+    const incomingSports = body.data.workouts
+      .filter((w: any) => !RUN_TYPES.includes(w.name))
+      .map((w: any) => normalizeRun(w, today))
 
-    const monthKey = `runs_${today.slice(0, 7)}`
-    const existing: any[] = (await redis.get<any[]>(monthKey)) ?? []
-    const merged = [...existing]
-    for (const run of incoming) {
-      if (!merged.find(r => r.date === run.date && r.name === run.name)) {
-        merged.unshift(run)
-      }
-    }
-    merged.sort((a, b) => b.date.localeCompare(a.date))
-    await redis.set(monthKey, merged.slice(0, 100))
-    return NextResponse.json({ ok: true, type: 'runs', count: merged.length })
+    const [runCount, sportsCount] = await Promise.all([
+      mergeWorkouts(incomingRuns, 'runs'),
+      mergeWorkouts(incomingSports, 'sports'),
+    ])
+    return NextResponse.json({ ok: true, type: 'workouts', runs: runCount, sports: sportsCount })
   }
 
   // ── METRICS ───────────────────────────────────────────────
