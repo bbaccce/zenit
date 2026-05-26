@@ -615,21 +615,17 @@ export default function Home() {
                   }}>↩ Undo</button>
                 )}
               </div>
-              <div style={{fontSize:10,color:C.muted,marginBottom:12}}>Week {currentWeek} of 12 · Goal {goal5k}</div>
               {PLAN.map(p=>{
                 const allDone = SESS_TYPES.every(t => checks[`w${p.w}_${t}`])
-                const isCurrentWeek = p.w === currentWeek
-                const isFuture = p.w > currentWeek
                 const isCollapsed = collapsed[p.w] ?? allDone
                 return(
-                  <div key={p.w} style={{borderRadius:10,marginBottom:6,border:`1px solid ${isCurrentWeek?C.run+'60':C.border}`,overflow:'hidden',opacity:isFuture?0.5:1}}>
+                  <div key={p.w} style={{borderRadius:10,marginBottom:6,border:`1px solid ${C.border}`,overflow:'hidden'}}>
                     <button onClick={()=>setCollapsed(prev=>({...prev,[p.w]:!(prev[p.w]??allDone)}))}
                       style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'10px 12px',
-                        background:allDone?C.green+'10':isCurrentWeek?C.run+'12':C.dim,border:'none',color:C.text,
+                        background:allDone?C.green+'10':C.dim,border:'none',color:C.text,
                         cursor:'pointer',textAlign:'left',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>
-                      <span style={{fontSize:12,color:allDone?C.green:isCurrentWeek?C.run:C.muted}}>{allDone?'●':isCurrentWeek?'▶':'○'}</span>
-                      <span style={{fontWeight:700,fontSize:12,color:allDone?C.green:isCurrentWeek?C.run:C.text}}>W{p.w}</span>
-                      {isCurrentWeek&&!allDone&&<span style={{background:C.run+'30',color:C.run,fontSize:9,padding:'1px 6px',borderRadius:4,fontWeight:700}}>Current</span>}
+                      <span style={{fontSize:12,color:allDone?C.green:C.muted}}>{allDone?'●':'○'}</span>
+                      <span style={{fontWeight:700,fontSize:12,color:allDone?C.green:C.text}}>W{p.w}</span>
                       {allDone&&<span style={{background:C.green+'20',color:C.green,fontSize:9,padding:'1px 6px',borderRadius:4,fontWeight:700}}>Done</span>}
                       <span style={{marginLeft:'auto',fontSize:10,color:C.muted}}>{isCollapsed?'▾':'▴'}</span>
                     </button>
