@@ -571,7 +571,7 @@ export default function Home() {
                   </div>
                   {runs.length>0&&(
                     <div>
-                      {runs.filter(r=>!latestRuns.some(lr=>lr.date===r.date&&lr.name===r.name)).map((r,i)=>{
+                      {runs.map((r,i)=>{
                         const d = typeof r.distance_km==='object'&&r.distance_km!=null ? +(r.distance_km.qty.toFixed(2)) : r.distance_km
                         return(
                           <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',

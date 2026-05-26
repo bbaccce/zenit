@@ -81,6 +81,8 @@ export async function GET() {
   const sportMonthKeys = makeMonthKeys('sports')
 
   const calories = await redis.get(`calories_${today}`) || {}
+  const settingsData = (await redis.get<Record<string, unknown>>('settings')) || {}
+  const basal = Number(settingsData.basalCalories ?? 1800)
   const [rawAllMonths, rawSportMonths] = await Promise.all([
     Promise.all(runMonthKeys.map(k => redis.get<any[]>(k))),
     Promise.all(sportMonthKeys.map(k => redis.get<any[]>(k))),
@@ -123,7 +125,7 @@ export async function GET() {
     date,
     burned: calVals[i]?.calories_kcal || 0,
     eaten: dietVals[i]?.calories_kcal || 0,
-    net: (dietVals[i]?.calories_kcal || 0) - (calVals[i]?.calories_kcal || 0),
+    net: (dietVals[i]?.calories_kcal || 0) - ((calVals[i]?.calories_kcal || 0) + basal),
   }))
 
   return NextResponse.json({ calories, runs, latestRuns, sports: monthlySports, latestSports, cigs, plan, dietaryCalories, history })

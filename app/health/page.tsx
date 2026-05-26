@@ -47,7 +47,6 @@ const SESS = [
   {key:'long', label:'LONG'},
 ] as const
 
-const CURRENT_WEEK = 5
 const TABS = ['🔥','🏃','🚭','🧠']
 const TABNAMES = ['Calories','Running','Smoking','Mind']
 
@@ -58,7 +57,7 @@ export default function Page() {
   const [data, setData]   = useState<any>(null)
   const [plan, setPlan]   = useState<Record<string,boolean>>({})
   const [cigs, setCigs]   = useState(0)
-  const [settings, setSettings] = useState({ basalCalories:1800, calGoal:600, eatGoal:2200, cigGoal:10 })
+  const [settings, setSettings] = useState({ basalCalories:1800, calGoal:600, eatGoal:2200, cigGoal:10, planStartDate:'2026-04-28' })
   // collapsed state: week number -> bool (true = manually collapsed)
   const [collapsed, setCollapsed] = useState<Record<number,boolean>>({})
   // undo stack: array of {wk, key} for last unchecked action
@@ -154,6 +153,8 @@ export default function Page() {
   const cigGoal = settings.cigGoal
   const totalBurned = kcal + basal
   const net = eaten - totalBurned
+  const daysSinceStart = Math.floor((Date.now() - new Date(settings.planStartDate).getTime()) / 86400000)
+  const currentWeek = Math.min(12, Math.max(1, Math.floor(daysSinceStart / 7) + 1))
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh', color: C.text, fontFamily: "'DM Sans',system-ui,sans-serif", paddingBottom: 'calc(70px + env(safe-area-inset-bottom))' }}>
@@ -332,14 +333,14 @@ export default function Page() {
                   }}>↩ Undo</button>
                 )}
               </div>
-              <div style={{ fontSize: 10, color: C.muted, marginBottom: 16 }}>Week 5 of 12 · Goal 22:00</div>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 16 }}>Week {currentWeek} of 12 · Goal 22:00</div>
 
               {PLAN.map(week => {
-                const isCurrentWeek = week.w === CURRENT_WEEK
+                const isCurrentWeek = week.w === currentWeek
                 const allDone = SESS.every(s => plan[`w${week.w}_${s.key}`])
                 const isCollapsed = collapsed[week.w] ?? allDone
-                const isPast = week.w < CURRENT_WEEK
-                const isFuture = week.w > CURRENT_WEEK
+                const isPast = week.w < currentWeek
+                const isFuture = week.w > currentWeek
 
                 return (
                   <div key={week.w} style={{
@@ -452,7 +453,7 @@ export default function Page() {
                 🍽️ <span style={{ color: C.food }}>{eaten > 0 ? `${eaten} kcal` : 'Not logged'}</span> eaten<br />
                 🏃 <span style={{ color: C.run }}>PB 24:32</span> · Goal 22:00<br />
                 🚭 <span style={{ color: C.smoke }}>{cigs}/{cigGoal}</span> cigarettes<br />
-                📅 <span style={{ color: C.green }}>Week 5</span> of 12-week plan
+                📅 <span style={{ color: C.green }}>Week {currentWeek}</span> of 12-week plan
               </div>
             </div>
           </div>
