@@ -12,6 +12,9 @@ const DEFAULTS = {
   eatGoal: 2200,
   cigGoal: 10,
   planStartDate: '2026-04-28',
+  pb5kSecs: 1472,    // 24:32
+  goal5kSecs: 1320,  // 22:00
+  start5kSecs: 1560, // 26:00 (scale start)
 }
 
 export async function GET() {

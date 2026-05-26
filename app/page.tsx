@@ -60,6 +60,10 @@ function mondayOf(d: Date): Date {
   return x
 }
 
+function fmtSecs(s: number): string {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 function ymd(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth()+1).padStart(2,'0')
@@ -106,7 +110,7 @@ export default function Home() {
   const [lastSync, setLastSync] = useState('')
 
   // Settings (basal, goals) — fetched from API
-  const [settings, setSettings] = useState({ basalCalories: 1800, calGoal: 600, eatGoal: 2200, cigGoal: 10 })
+  const [settings, setSettings] = useState({ basalCalories: 1800, calGoal: 600, eatGoal: 2200, cigGoal: 10, planStartDate: '2026-04-28', pb5kSecs: 1472, goal5kSecs: 1320, start5kSecs: 1560 })
   const [editingBasal, setEditingBasal] = useState(false)
   const [basalInput, setBasalInput] = useState('1800')
 
@@ -210,6 +214,16 @@ export default function Home() {
   const calPct = Math.min(Math.round((kcal/calGoal)*100), 100)
   const eatPct = Math.min(Math.round((eaten/eatGoal)*100), 100)
   const cigPct = Math.min(Math.round((cigs/cigGoal)*100), 100)
+  const daysSinceStart = Math.floor((Date.now() - new Date(settings.planStartDate).getTime()) / 86400000)
+  const currentWeek = Math.min(12, Math.max(1, Math.floor(daysSinceStart / 7) + 1))
+
+  const pb5k = fmtSecs(settings.pb5kSecs)
+  const goal5k = fmtSecs(settings.goal5kSecs)
+  const start5k = fmtSecs(settings.start5kSecs)
+  const gapSecs = settings.pb5kSecs - settings.goal5kSecs
+  const gap5k = gapSecs > 0 ? `−${fmtSecs(gapSecs)}` : `+${fmtSecs(-gapSecs)}`
+  const pct5k = Math.max(0, Math.min(100, Math.round((settings.start5kSecs - settings.pb5kSecs) / (settings.start5kSecs - settings.goal5kSecs) * 100)))
+
   const TABS = ['🔥','🏃','🏅','🚭','🤖']
   const TABNAMES = ['Calories','Running','Sports','Smoke','Coach']
 
@@ -471,15 +485,15 @@ export default function Home() {
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>🎯 5K Goal Tracker</div>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
-                <div><div style={{fontSize:9,color:C.muted}}>PB</div><div style={{fontSize:28,fontWeight:900,color:C.run}}>24:32</div></div>
-                <div style={{textAlign:'center'}}><div style={{fontSize:9,color:C.muted}}>Gap</div><div style={{fontSize:28,fontWeight:900,color:C.yellow}}>−2:32</div></div>
-                <div style={{textAlign:'right'}}><div style={{fontSize:9,color:C.muted}}>Goal</div><div style={{fontSize:28,fontWeight:900,color:C.green}}>22:00</div></div>
+                <div><div style={{fontSize:9,color:C.muted}}>PB</div><div style={{fontSize:28,fontWeight:900,color:C.run}}>{pb5k}</div></div>
+                <div style={{textAlign:'center'}}><div style={{fontSize:9,color:C.muted}}>Gap</div><div style={{fontSize:28,fontWeight:900,color:C.yellow}}>{gap5k}</div></div>
+                <div style={{textAlign:'right'}}><div style={{fontSize:9,color:C.muted}}>Goal</div><div style={{fontSize:28,fontWeight:900,color:C.green}}>{goal5k}</div></div>
               </div>
               <div style={{height:8,background:C.border,borderRadius:4,overflow:'hidden'}}>
-                <div style={{height:'100%',width:'37%',background:`linear-gradient(90deg,${C.run},${C.green})`,borderRadius:4}}/>
+                <div style={{height:'100%',width:`${pct5k}%`,background:`linear-gradient(90deg,${C.run},${C.green})`,borderRadius:4}}/>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:C.muted,marginTop:4}}>
-                <span>26:00</span><span>You (37%)</span><span>22:00 🏁</span>
+                <span>{start5k}</span><span>You ({pct5k}%)</span><span>{goal5k} 🏁</span>
               </div>
             </div>
 
@@ -601,17 +615,21 @@ export default function Home() {
                   }}>↩ Undo</button>
                 )}
               </div>
+              <div style={{fontSize:10,color:C.muted,marginBottom:12}}>Week {currentWeek} of 12 · Goal {goal5k}</div>
               {PLAN.map(p=>{
                 const allDone = SESS_TYPES.every(t => checks[`w${p.w}_${t}`])
+                const isCurrentWeek = p.w === currentWeek
+                const isFuture = p.w > currentWeek
                 const isCollapsed = collapsed[p.w] ?? allDone
                 return(
-                  <div key={p.w} style={{borderRadius:10,marginBottom:6,border:`1px solid ${C.border}`,overflow:'hidden'}}>
+                  <div key={p.w} style={{borderRadius:10,marginBottom:6,border:`1px solid ${isCurrentWeek?C.run+'60':C.border}`,overflow:'hidden',opacity:isFuture?0.5:1}}>
                     <button onClick={()=>setCollapsed(prev=>({...prev,[p.w]:!(prev[p.w]??allDone)}))}
                       style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'10px 12px',
-                        background:allDone?C.green+'10':C.dim,border:'none',color:C.text,
+                        background:allDone?C.green+'10':isCurrentWeek?C.run+'12':C.dim,border:'none',color:C.text,
                         cursor:'pointer',textAlign:'left',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>
-                      <span style={{fontSize:12,color:allDone?C.green:C.muted}}>{allDone?'●':'○'}</span>
-                      <span style={{fontWeight:700,fontSize:12,color:allDone?C.green:C.text}}>W{p.w}</span>
+                      <span style={{fontSize:12,color:allDone?C.green:isCurrentWeek?C.run:C.muted}}>{allDone?'●':isCurrentWeek?'▶':'○'}</span>
+                      <span style={{fontWeight:700,fontSize:12,color:allDone?C.green:isCurrentWeek?C.run:C.text}}>W{p.w}</span>
+                      {isCurrentWeek&&!allDone&&<span style={{background:C.run+'30',color:C.run,fontSize:9,padding:'1px 6px',borderRadius:4,fontWeight:700}}>Current</span>}
                       {allDone&&<span style={{background:C.green+'20',color:C.green,fontSize:9,padding:'1px 6px',borderRadius:4,fontWeight:700}}>Done</span>}
                       <span style={{marginLeft:'auto',fontSize:10,color:C.muted}}>{isCollapsed?'▾':'▴'}</span>
                     </button>
@@ -887,9 +905,9 @@ export default function Home() {
                 🍽️ <span style={{color:C.food}}>{eaten > 0 ? `${eaten} kcal` : 'Not logged'}</span> eaten<br/>
                 💤 <span style={{color:C.basal}}>{basalCalories} kcal</span> basal<br/>
                 ⚖️ <span style={{color:balanceColor}}>{eaten > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
-                🏃 <span style={{color:C.run}}>PB 24:32</span> · Goal 22:00<br/>
+                🏃 <span style={{color:C.run}}>PB {pb5k}</span> · Goal {goal5k}<br/>
                 🚭 <span style={{color:C.smoke}}>{cigs}/{cigGoal}</span> cigarettes<br/>
-                📅 <span style={{color:C.green}}>Week 5</span> of 12-week plan
+                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 12-week plan
               </div>
             </div>
           </div>
