@@ -50,7 +50,7 @@ const SESS = [
 const TABS = ['🔥','🏃','🚭','🧠']
 const TABNAMES = ['Calories','Running','Smoking','Mind']
 
-function ymd(d: Date) { return d.toISOString().split('T')[0] }
+function ymd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 
 export default function Page() {
   const [tab, setTab] = useState(1)
@@ -231,7 +231,7 @@ export default function Page() {
                   ))}
                   {(() => {
                     const todayStr = ymd(new Date())
-                    return [...history].reverse().map((h, i) => {
+                    return history.map((h, i) => {
                       const isToday = h.date === todayStr
                       return (
                         <div key={i} title={`${h.date}: ${h.burned} burned, ${h.eaten} eaten`}
