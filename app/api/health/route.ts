@@ -18,7 +18,8 @@ function scalar(v: any): number | null {
 }
 
 function normalizeRun(w: any, fallbackDate: string) {
-  const dateStr = (w.date ?? w.start ?? fallbackDate).replace(' ', 'T').split('T')[0]
+  const startRaw = (w.date ?? w.start ?? fallbackDate).replace(' ', 'T')
+  const dateStr = startRaw.split('T')[0]
   const distKm = scalar(w.distance_km ?? w.distance)
   const durRaw = scalar(w.duration_min ?? w.duration)
   // >600 means value is in seconds (no run lasts 10+ hours in minutes)
@@ -40,6 +41,7 @@ function normalizeRun(w: any, fallbackDate: string) {
   return {
     name: w.name,
     date: dateStr,
+    start: startRaw,
     duration_min: durMin,
     distance_km: distKm != null ? Math.round(distKm * 100) / 100 : null,
     pace_per_km: pace,
@@ -60,7 +62,7 @@ async function mergeWorkouts(items: any[], prefix: string): Promise<number> {
     const existing: any[] = (await redis.get<any[]>(mk)) ?? []
     const merged = [...existing]
     for (const item of monthItems) {
-      const idx = merged.findIndex(r => r.date === item.date && r.name === item.name)
+      const idx = merged.findIndex(r => r.start === item.start && r.name === item.name)
       if (idx >= 0) merged[idx] = item
       else merged.unshift(item)
     }
@@ -95,7 +97,7 @@ export async function GET() {
     .flatMap(r => r ?? [])
     .map(r => normalizeRun(r, today))
     .sort((a, b) => b.date.localeCompare(a.date))
-    .filter(r => { const k = `${r.date}_${r.name}`; if (seen.has(k)) return false; seen.add(k); return true })
+    .filter(r => { const k = `${r.start}_${r.name}`; if (seen.has(k)) return false; seen.add(k); return true })
     .filter(r => r.date >= cutoff)
   const runs = monthRuns
 
@@ -106,7 +108,7 @@ export async function GET() {
     .flatMap(r => r ?? [])
     .map(r => normalizeRun(r, today))
     .sort((a, b) => b.date.localeCompare(a.date))
-    .filter(r => { const k = `${r.date}_${r.name}`; if (sportSeen.has(k)) return false; sportSeen.add(k); return true })
+    .filter(r => { const k = `${r.start}_${r.name}`; if (sportSeen.has(k)) return false; sportSeen.add(k); return true })
     .filter(r => r.date >= sportCutoff)
 
   const cigs = await redis.get(`cigs_${today}`) || 0
