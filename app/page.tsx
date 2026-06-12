@@ -113,6 +113,8 @@ export default function Home() {
   const [settings, setSettings] = useState({ basalCalories: 1800, calGoal: 600, eatGoal: 2200, cigGoal: 10, planStartDate: '2026-04-28', pb5kSecs: 1472, goal5kSecs: 1320, start5kSecs: 1560 })
   const [editingBasal, setEditingBasal] = useState(false)
   const [basalInput, setBasalInput] = useState('1800')
+  const [editingPb, setEditingPb] = useState(false)
+  const [pbInput, setPbInput] = useState('24:32')
 
   const basalCalories = settings.basalCalories
   const calGoal = settings.calGoal
@@ -141,6 +143,7 @@ export default function Home() {
       if (settingsRes) {
         setSettings(settingsRes)
         setBasalInput(String(settingsRes.basalCalories))
+        setPbInput(fmtSecs(settingsRes.pb5kSecs))
       }
       setLastSync(new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}))
     } catch(e) {}
@@ -164,6 +167,29 @@ export default function Home() {
     const data = await res.json()
     setSettings(data)
     setEditingBasal(false)
+  }
+
+  async function savePb() {
+    const parts = pbInput.match(/^(\d+):(\d{2})$/)
+    if (!parts) {
+      setPbInput(fmtSecs(settings.pb5kSecs))
+      setEditingPb(false)
+      return
+    }
+    const secs = parseInt(parts[1]) * 60 + parseInt(parts[2])
+    if (secs < 600 || secs > 3600) {
+      setPbInput(fmtSecs(settings.pb5kSecs))
+      setEditingPb(false)
+      return
+    }
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pb5kSecs: secs }),
+    })
+    const data = await res.json()
+    setSettings(data)
+    setEditingPb(false)
   }
 
   async function addCig() {
@@ -220,6 +246,7 @@ export default function Home() {
   const pb5k = fmtSecs(settings.pb5kSecs)
   const goal5k = fmtSecs(settings.goal5kSecs)
   const start5k = fmtSecs(settings.start5kSecs)
+  const pbPacePerKm = fmtSecs(Math.round(settings.pb5kSecs / 5))
   const gapSecs = settings.pb5kSecs - settings.goal5kSecs
   const gap5k = gapSecs > 0 ? `−${fmtSecs(gapSecs)}` : `+${fmtSecs(-gapSecs)}`
   const pct5k = Math.max(0, Math.min(100, Math.round((settings.start5kSecs - settings.pb5kSecs) / (settings.start5kSecs - settings.goal5kSecs) * 100)))
@@ -484,8 +511,32 @@ export default function Home() {
           <div>
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>🎯 5K Goal Tracker</div>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
-                <div><div style={{fontSize:9,color:C.muted}}>PB</div><div style={{fontSize:28,fontWeight:900,color:C.run}}>{pb5k}</div></div>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'flex-end'}}>
+                <div
+                  onClick={() => !editingPb && setEditingPb(true)}
+                  style={{cursor:'pointer',background:C.dim,border:`1px solid ${C.run}30`,borderRadius:10,padding:'10px 14px',minWidth:90}}
+                >
+                  <div style={{fontSize:9,color:C.muted,marginBottom:4}}>PB ✎</div>
+                  {editingPb ? (
+                    <input
+                      type="text"
+                      value={pbInput}
+                      onChange={e => setPbInput(e.target.value)}
+                      onBlur={savePb}
+                      onKeyDown={e => { if (e.key === 'Enter') savePb() }}
+                      autoFocus
+                      style={{
+                        width:80,fontSize:24,fontWeight:900,color:C.run,
+                        background:'transparent',border:`1px solid ${C.run}50`,
+                        borderRadius:4,textAlign:'center',padding:'2px 0',
+                        fontFamily:'monospace',
+                      }}
+                    />
+                  ) : (
+                    <div style={{fontSize:28,fontWeight:900,color:C.run}}>{pb5k}</div>
+                  )}
+                  <div style={{fontSize:10,color:C.muted,marginTop:4}}>{pbPacePerKm}<span style={{fontSize:8}}>/km</span></div>
+                </div>
                 <div style={{textAlign:'center'}}><div style={{fontSize:9,color:C.muted}}>Gap</div><div style={{fontSize:28,fontWeight:900,color:C.yellow}}>{gap5k}</div></div>
                 <div style={{textAlign:'right'}}><div style={{fontSize:9,color:C.muted}}>Goal</div><div style={{fontSize:28,fontWeight:900,color:C.green}}>{goal5k}</div></div>
               </div>
