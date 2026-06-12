@@ -511,7 +511,7 @@ export default function Home() {
           <div>
             <div style={{background:C.card,border:`1px solid ${C.run}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.run,textTransform:'uppercase',letterSpacing:2,marginBottom:12}}>🎯 5K Goal Tracker</div>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'flex-end'}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'flex-start'}}>
                 <div
                   onClick={() => !editingPb && setEditingPb(true)}
                   style={{cursor:'pointer',background:C.dim,border:`1px solid ${C.run}30`,borderRadius:10,padding:'10px 14px',minWidth:90}}
@@ -535,7 +535,7 @@ export default function Home() {
                   ) : (
                     <div style={{fontSize:28,fontWeight:900,color:C.run}}>{pb5k}</div>
                   )}
-                  <div style={{fontSize:10,color:C.muted,marginTop:4}}>{pbPacePerKm}<span style={{fontSize:8}}>/km</span></div>
+                  <div style={{fontSize:12,color:C.run,marginTop:6,fontWeight:700}}>{pbPacePerKm}<span style={{fontSize:9,color:C.muted,fontWeight:400}}> /km</span></div>
                 </div>
                 <div style={{textAlign:'center'}}><div style={{fontSize:9,color:C.muted}}>Gap</div><div style={{fontSize:28,fontWeight:900,color:C.yellow}}>{gap5k}</div></div>
                 <div style={{textAlign:'right'}}><div style={{fontSize:9,color:C.muted}}>Goal</div><div style={{fontSize:28,fontWeight:900,color:C.green}}>{goal5k}</div></div>
