@@ -1,4 +1,4 @@
-﻿﻿'use client'
+﻿﻿﻿'use client'
 import { useState, useEffect, useCallback } from 'react'
 
 const C = {
@@ -437,8 +437,11 @@ export default function Home() {
 
               {weeks.map((week, wi) => {
                 const todayStr = ymd(new Date())
+                const weekTotal = week.days.reduce((s, d) => d && d.net !== null ? s + (-d.net) : s, 0)
+                const hasWkData = week.days.some(d => d && d.net !== null)
+                const wkColor = !hasWkData ? EMPTY : weekTotal < 0 ? RED : weekTotal <= 1400 ? AMBER : weekTotal <= 3500 ? YELLOW : weekTotal <= 7000 ? DEEP_GREEN : BRIGHT_BLUE
                 return (
-                  <div key={wi} style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr)',gap:4,marginBottom:4}}>
+                  <div key={wi} style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr) 34px',gap:4,marginBottom:4}}>
                     <div style={{fontSize:10,color:C.muted,fontWeight:700,textAlign:'center',alignSelf:'center'}}>
                       {week.weekNum}
                     </div>
@@ -466,6 +469,17 @@ export default function Home() {
                         </div>
                       )
                     })}
+                    <div style={{
+                      background:wkColor,
+                      borderRadius:8,
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      fontSize:9,fontWeight:700,
+                      color:hasWkData?'#000':C.muted,
+                      alignSelf:'center',
+                      minHeight:28,
+                    }}>
+                      {hasWkData?(weekTotal>=0?Math.round(weekTotal):`-${Math.abs(Math.round(weekTotal))}`):'-'}
+                    </div>
                   </div>
                 )
               })}
@@ -504,40 +518,6 @@ export default function Home() {
               ))}
             </div>
 
-            {/* This Week */}
-            <div style={{marginTop:12,background:C.card,border:`1px solid ${C.cal}20`,borderRadius:14,padding:'14px 16px'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                <div style={{fontSize:10,color:C.muted,textTransform:'uppercase',letterSpacing:2}}>This Week</div>
-                <div style={{fontSize:10,color:C.cal}}>W{weeks[4]?.weekNum}</div>
-              </div>
-              <div style={{display:'flex',gap:4,justifyContent:'flex-end'}}>
-                {DAYS_LABEL.map((label, di) => {
-                  const day = weeks[4]?.days[di]
-                  const todayStr = ymd(new Date())
-                  const color = day?.net !== null && day?.net !== undefined ? netColor(day.net) : EMPTY
-                  const isToday = day?.date === todayStr
-                  const isFuture = day ? new Date(day.date) > new Date(todayStr) : false
-                  const hasData = day?.net !== null && day?.net !== undefined
-                  return (
-                    <div key={di} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-                      <div style={{
-                        width:34,height:34,
-                        background: isFuture ? 'transparent' : (hasData ? color : EMPTY),
-                        border: isToday ? `2px solid ${C.text}` : isFuture ? `1px dashed ${C.border}` : 'none',
-                        borderRadius:8,
-                        display:'flex',alignItems:'center',justifyContent:'center',
-                        fontSize:9,fontWeight:700,
-                        color: hasData ? '#000' : C.muted,
-                        opacity: isFuture ? 0.3 : 1,
-                      }}>
-                        {hasData ? (day!.net! < 0 ? Math.abs(day!.net!) : `+${day!.net}`) : ''}
-                      </div>
-                      <div style={{fontSize:8,color:isToday?C.text:C.muted,fontWeight:isToday?700:400}}>{label.slice(0,1)}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
           </div>
         )}
 
