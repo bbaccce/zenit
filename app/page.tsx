@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect, useCallback } from 'react'
 
 const C = {
@@ -39,6 +39,10 @@ const PLAN = [
   {w:10,sp:'5x800m @ 4:20',ez:'5-7km',te:'4km @ 4:30',lo:'8-12km'},
   {w:11,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km'},
   {w:12,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km'},
+  {w:13,sp:'4x1km @ 4:25',ez:'6km easy',te:'5km @ 4:42',lo:'10-12km'},
+  {w:14,sp:'4x1km @ 4:22',ez:'6km easy',te:'5km @ 4:35',lo:'10-12km'},
+  {w:15,sp:'3x1km @ 4:20',ez:'5km easy',te:'5km @ 4:28',lo:'8km easy'},
+  {w:16,sp:'3x400m sharp',ez:'4km + 3km easy',te:'-',lo:'5K RACE sub-22:00'},
 ]
 
 const SESS_TYPES = ['speed','easy','tempo','long']
