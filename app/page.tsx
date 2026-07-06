@@ -1,4 +1,4 @@
-﻿﻿﻿'use client'
+﻿﻿﻿﻿'use client'
 import { useState, useEffect, useCallback } from 'react'
 
 const C = {
@@ -428,11 +428,12 @@ export default function Home() {
             <div style={{background:C.card,border:`1px solid ${C.cal}30`,borderRadius:14,padding:20,marginBottom:12}}>
               <div style={{fontSize:10,color:C.cal,textTransform:'uppercase',letterSpacing:2,marginBottom:14}}>📊 30-Day History</div>
               
-              <div style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr)',gap:4,marginBottom:6}}>
+              <div style={{display:'grid',gridTemplateColumns:'32px repeat(7, 1fr) 34px',gap:4,marginBottom:6}}>
                 <div style={{fontSize:8,color:C.muted,letterSpacing:1,textAlign:'center'}}>WK</div>
                 {DAYS_LABEL.map(d => (
                   <div key={d} style={{fontSize:8,color:C.muted,letterSpacing:1,textAlign:'center'}}>{d}</div>
                 ))}
+                <div/>
               </div>
 
               {weeks.map((week, wi) => {
