@@ -1,4 +1,4 @@
-﻿'use client'
+﻿﻿'use client'
 import { useState, useEffect, useCallback } from 'react'
 
 const C = {
@@ -954,7 +954,7 @@ export default function Home() {
                 ⚖️ <span style={{color:balanceColor}}>{eaten > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
                 🏃 <span style={{color:C.run}}>PB {pb5k}</span> · Goal {goal5k}<br/>
                 🚭 <span style={{color:C.smoke}}>{cigs}/{cigGoal}</span> cigarettes<br/>
-                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 12-week plan
+                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 16-week plan
               </div>
             </div>
           </div>
