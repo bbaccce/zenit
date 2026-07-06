@@ -503,6 +503,41 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            {/* This Week */}
+            <div style={{marginTop:12,background:C.card,border:`1px solid ${C.cal}20`,borderRadius:14,padding:'14px 16px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div style={{fontSize:10,color:C.muted,textTransform:'uppercase',letterSpacing:2}}>This Week</div>
+                <div style={{fontSize:10,color:C.cal}}>W{weeks[4]?.weekNum}</div>
+              </div>
+              <div style={{display:'flex',gap:4,justifyContent:'flex-end'}}>
+                {DAYS_LABEL.map((label, di) => {
+                  const day = weeks[4]?.days[di]
+                  const todayStr = ymd(new Date())
+                  const color = day?.net !== null && day?.net !== undefined ? netColor(day.net) : EMPTY
+                  const isToday = day?.date === todayStr
+                  const isFuture = day ? new Date(day.date) > new Date(todayStr) : false
+                  const hasData = day?.net !== null && day?.net !== undefined
+                  return (
+                    <div key={di} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                      <div style={{
+                        width:34,height:34,
+                        background: isFuture ? 'transparent' : (hasData ? color : EMPTY),
+                        border: isToday ? `2px solid ${C.text}` : isFuture ? `1px dashed ${C.border}` : 'none',
+                        borderRadius:8,
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        fontSize:9,fontWeight:700,
+                        color: hasData ? '#000' : C.muted,
+                        opacity: isFuture ? 0.3 : 1,
+                      }}>
+                        {hasData ? (day!.net! < 0 ? Math.abs(day!.net!) : `+${day!.net}`) : ''}
+                      </div>
+                      <div style={{fontSize:8,color:isToday?C.text:C.muted,fontWeight:isToday?700:400}}>{label.slice(0,1)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )}
 
@@ -954,7 +989,7 @@ export default function Home() {
                 ⚖️ <span style={{color:balanceColor}}>{eaten > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
                 🏃 <span style={{color:C.run}}>PB {pb5k}</span> · Goal {goal5k}<br/>
                 🚭 <span style={{color:C.smoke}}>{cigs}/{cigGoal}</span> cigarettes<br/>
-                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 16-week plan
+                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 12-week plan
               </div>
             </div>
           </div>
