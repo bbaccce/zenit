@@ -39,6 +39,10 @@ const PLAN = [
   {w:10,sp:'5x800m @ 4:20',ez:'5-7km',te:'4km @ 4:30',lo:'8-12km'},
   {w:11,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km'},
   {w:12,sp:'4x1km @ 4:20',ez:'5-7km',te:'5km @ 4:30',lo:'8-12km'},
+  {w:13,sp:'4x1km @ 4:25',ez:'6km easy',te:'5km @ 4:42',lo:'10-12km'},
+  {w:14,sp:'4x1km @ 4:22',ez:'6km easy',te:'5km @ 4:35',lo:'10-12km'},
+  {w:15,sp:'3x1km @ 4:20',ez:'5km easy',te:'5km @ 4:28',lo:'8km easy'},
+  {w:16,sp:'3x400m sharp',ez:'4km + 3km easy',te:'-',lo:'5K RACE sub-22:00'},
 ]
 
 const SESS_TYPES = ['speed','easy','tempo','long']
@@ -970,7 +974,7 @@ export default function Home() {
                 ⚖️ <span style={{color:balanceColor}}>{eaten > 0 ? `${net > 0 ? '+' : ''}${net} kcal net` : '—'}</span><br/>
                 🏃 <span style={{color:C.run}}>PB {pb5k}</span> · Goal {goal5k}<br/>
                 🚭 <span style={{color:C.smoke}}>{cigs}/{cigGoal}</span> cigarettes<br/>
-                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 12-week plan
+                📅 <span style={{color:C.green}}>Week {currentWeek}</span> of 16-week plan
               </div>
             </div>
           </div>
